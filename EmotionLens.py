@@ -104,18 +104,6 @@ def start_emotionDetection():
 
 
 
-# Function to quit emotion detection 
-def quit_emotionLens():
-    global cap  # Access the global cap variable
-    if cap is not None:  # If the camera is running, release it
-        cap.release()
-    cv2.destroyAllWindows()  # Close OpenCV windows
-    root.quit()  # Exit the Tkinter mainloop
-
-
-
-
-
 # Function to see settings for 'EmotionLens'
 def settings_emotionLens():
     # Clear existing widgets in the window
@@ -152,6 +140,53 @@ def settings_emotionLens():
 
 
 
+# Function to see help guide
+def helpGuide_emotionLens():
+    # Clear existing widgets in the window
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    # Create a settings frame
+    helpGuide_frame = tk.Frame(root)
+    helpGuide_frame.pack(pady=20)
+
+    # Add help guide info
+    helpGuide_label = tk.Label(helpGuide_frame, text="""
+    Welcome to EmotionLens Help Guide!
+    This application helps you detect emotions in real-time using your webcam.
+    
+    - Start Emotion Detection: Begin detecting emotions in real time.
+    - Settings: Customize bounding box color, font size, and font color.
+    - Calibrate Camera: Calibrate your camera for better accuracy (Coming Soon).
+    - Quit: Exit the application.
+    
+    Press 'q' during emotion detection to stop the webcam.
+    """)
+    helpGuide_label.pack(pady=20)
+
+    back_button = tk.Button(helpGuide_frame, text="Back", font=("Helvetica", 12), command=create_main_buttons)
+    back_button.grid(row=4, column=0, columnspan=2, pady=20)
+
+
+
+
+
+# Function to calibrate camera
+
+
+
+
+# Function to quit emotion detection 
+def quit_emotionLens():
+    global cap  # Access the global cap variable
+    if cap is not None:  # If the camera is running, release it
+        cap.release()
+    cv2.destroyAllWindows()  # Close OpenCV windows
+    root.quit()  # Exit the Tkinter mainloop
+
+
+
+
 
 # Function to recreate the main buttons
 def create_main_buttons():
@@ -167,7 +202,7 @@ def create_main_buttons():
     settings_button = tk.Button(root, text="Settings", command=settings_emotionLens)
     settings_button.pack(pady=10)
 
-    helpGuide_button = tk.Button(root, text="View Help Guide")
+    helpGuide_button = tk.Button(root, text="View Help Guide", command=helpGuide_emotionLens)
     helpGuide_button.pack(pady=10)
 
     calibrateCamera_button = tk.Button(root, text="Calibrate Camera")
