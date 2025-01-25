@@ -18,8 +18,6 @@ cap = None
 
 
 
-
-
 # Function to start emotion detection when the user clicks the start button on the GUI
 def start_emotionDetection():
 
@@ -102,8 +100,6 @@ def start_emotionDetection():
 
 
 
-
-
 # Function to see settings for 'EmotionLens'
 def settings_emotionLens():
     # Clear existing widgets in the window
@@ -138,8 +134,6 @@ def settings_emotionLens():
 
 
 
-
-
 # Function to see help guide
 def helpGuide_emotionLens():
     # Clear existing widgets in the window
@@ -151,28 +145,29 @@ def helpGuide_emotionLens():
     helpGuide_frame.pack(pady=20)
 
     # Add help guide info
-    helpGuide_label = tk.Label(helpGuide_frame, text="""
+    helpGuide_label = tk.Label(
+        helpGuide_frame,
+        text="""
     Welcome to EmotionLens Help Guide!
     This application helps you detect emotions in real-time using your webcam.
-    
+
     - Start Emotion Detection: Begin detecting emotions in real time.
     - Settings: Customize bounding box color, font size, and font color.
     - Calibrate Camera: Calibrate your camera for better accuracy (Coming Soon).
     - Quit: Exit the application.
-    
+
     Press 'q' during emotion detection to stop the webcam.
-    """)
+    """,
+        font=("Helvetica", 12), justify="left",)
     helpGuide_label.pack(pady=20)
 
-    back_button = tk.Button(helpGuide_frame, text="Back", font=("Helvetica", 12), command=create_main_buttons)
-    back_button.grid(row=4, column=0, columnspan=2, pady=20)
-
-
+    # Back button
+    back_button = tk.Button(helpGuide_frame,text="Back", font=("Helvetica", 12), command=create_main_buttons,)
+    back_button.pack(pady=10)
 
 
 
 # Function to calibrate camera
-
 
 
 
@@ -183,7 +178,6 @@ def quit_emotionLens():
         cap.release()
     cv2.destroyAllWindows()  # Close OpenCV windows
     root.quit()  # Exit the Tkinter mainloop
-
 
 
 
