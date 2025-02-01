@@ -176,11 +176,11 @@ def helpGuide_emotionLens():
     for widget in root.winfo_children():
         widget.destroy()
 
-    # Create a settings frame
+    # Create a help guide frame (expanded to fill the window properly)
     helpGuide_frame = tk.Frame(root)
-    helpGuide_frame.pack(pady=20)
+    helpGuide_frame.pack(expand=True, fill="both")
 
-    # Add help guide info
+    # Help guide info
     helpGuide_label = tk.Label(
         helpGuide_frame,
         text="""
@@ -189,17 +189,18 @@ def helpGuide_emotionLens():
 
     - Start Emotion Detection: Begin detecting emotions in real time.
     - Settings: Customize bounding box color, font size, and font color.
-    - Calibrate Camera: Calibrate your camera for better accuracy (Coming Soon).
+    - Calibrate Camera: Calibrate your camera for better accuracy.
     - Quit: Exit the application.
 
     Press 'q' during emotion detection to stop the webcam.
     """,
-        font=("Helvetica", 12), justify="left",)
-    helpGuide_label.pack(pady=20)
+        font=("Helvetica", 12), justify="left", anchor="w",
+    )
+    helpGuide_label.pack(pady=20, padx=20, anchor="w")
 
     # Back button
-    back_button = tk.Button(helpGuide_frame,text="Back", font=("Helvetica", 12), command=create_main_buttons,)
-    back_button.pack(pady=10)
+    back_button = tk.Button(helpGuide_frame, text="Back", font=("Helvetica", 12), command=create_main_buttons)
+    back_button.pack(pady=20)
 
 
 
@@ -279,6 +280,12 @@ def create_main_buttons():
 
     settings_button = tk.Button(root, text="Settings", command=settings_emotionLens)
     settings_button.pack(pady=10)
+
+    helpGuide_button = tk.Button(root, text="Help Guide", command=helpGuide_emotionLens)
+    helpGuide_button.pack(pady=10)
+
+    calibrateCamera_button = tk.Button(root, text="Calibrate Camera", command=calibrate_camera)
+    calibrateCamera_button.pack(pady=10)
 
     quit_button = tk.Button(root, text="Quit", command=quit_emotionLens)
     quit_button.pack(pady=10)
