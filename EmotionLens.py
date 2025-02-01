@@ -172,9 +172,56 @@ def helpGuide_emotionLens():
 
 
 # Function to calibrate camera
+def calibrate_camera():
+    global cap, brightness, contrast
 
+    if cap is None or not cap.isOpened():
+        cap = cv2.VideoCapture(0)  # Open Webcam
+        if not cap.isOpened():
+            print("Error: Could not open webcam.")
+            return
 
+    # Create a window for calibration settings
+    cv2.namedWindow("Calibration")
 
+    # Callback function for trackbars (does nothing but required)
+    def nothing(x):
+        pass
+
+    # Create trackbars for brightness and contrast
+    cv2.createTrackbar("Brightness", "Calibration", brightness, 100, nothing)
+    cv2.createTrackbar("Contrast", "Calibration", contrast, 100, nothing)
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Error: Failed to capture image")
+            break
+
+        # Mirror the frame
+        frame = cv2.flip(frame, 1)
+
+        # Get values from trackbars
+        brightness = cv2.getTrackbarPos("Brightness", "Calibration")
+        contrast = cv2.getTrackbarPos("Contrast", "Calibration")
+
+        # Apply brightness and contrast adjustments
+        alpha = contrast / 50 + 0.5  # Scale contrast
+        beta = brightness - 50  # Adjust brightness
+        adjusted_frame = cv2.convertScaleAbs(frame, alpha=alpha, beta=beta)
+
+        # Show the adjusted video feed
+        cv2.imshow("Calibration", adjusted_frame)
+
+        # Exit when 'q' is pressed
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    # Close calibration window but keep the camera open
+    cv2.destroyWindow("Calibration")
+    print(f"Camera calibration saved. Brightness: {brightness}, Contrast: {contrast}")
+
+    
 # Function to quit emotion detection 
 def quit_emotionLens():
     global cap  # Access the global cap variable
@@ -203,7 +250,7 @@ def create_main_buttons():
     helpGuide_button = tk.Button(root, text="View Help Guide", command=helpGuide_emotionLens)
     helpGuide_button.pack(pady=10)
 
-    calibrateCamera_button = tk.Button(root, text="Calibrate Camera")
+    calibrateCamera_button = tk.Button(root, text="Calibrate Camera", command=calibrate_camera)
     calibrateCamera_button.pack(pady=10)
 
     quit_button = tk.Button(root, text="Quit", command=quit_emotionLens)
