@@ -15,8 +15,9 @@ root.geometry("800x600") # Size of the window
 # Make capture a global variable, Initialise as None to declare globally
 cap = None
 
-
-
+# Calibration variables
+brightness = 50 #defaukt brightness
+contrast = 50 #Default contrast
 
 # Function to start emotion detection when the user clicks the start button on the GUI
 def start_emotionDetection():
@@ -42,6 +43,9 @@ def start_emotionDetection():
             if not ret:
                 print("Error: Failed to capture image")
                 return
+
+            # Mirror the frame
+            frame = cv2.flip(frame, 1)  # Flip horizontally
 
             # Convert the frame to grayscale for Haar Cascade
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
