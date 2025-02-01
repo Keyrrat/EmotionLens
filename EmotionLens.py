@@ -12,18 +12,22 @@ root=tk.Tk()
 root.title('EmotionLens - ')
 root.geometry("800x600") # Size of the window
 
-# Make capture a global variable, Initialise as None to declare globally
+# Make capture a global variable
 cap = None
 
 # Calibration variables
 brightness = 50 #defaukt brightness
 contrast = 50 #Default contrast
 
+# Global settings (defaults)
+bounding_box_color = (255, 0, 0)  # Default Blue
+font_color = (255, 255, 255)  # Default White
+
 # Function to start emotion detection when the user clicks the start button on the GUI
 def start_emotionDetection():
 
 # Turn on Camera
-    global cap # Access the global cap variable
+    global cap, bounding_box_color, font_color  # Access the global cap variable
     cap = cv2.VideoCapture(0)  # Open Webcam
     if not cap.isOpened():
         print("Error: Could not open webcam.")
@@ -58,24 +62,24 @@ def start_emotionDetection():
 
             # Process each detected face
             for (x, y, w, h) in faces:
-                # Draw a blue rectangle around the face
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)  # Blue rectangle for Haar Cascade
+                # Draw rectangle with selected bounding box color
+                cv2.rectangle(frame, (x, y), (x + w, y + h), bounding_box_color, 2)
 
                 # Crop the face region
                 face_roi = frame[y:y + h, x:x + w]
 
                 # Perform DeepFace emotion detection
                 try:
-                    analysis = DeepFace.analyze(face_roi, actions=['emotion'], enforce_detection=False)
+                    analysis = DeepFace.analyze(face_roi, actions=["emotion"], enforce_detection=False)
 
                     # If `analysis` is a list, extract the first result
                     if isinstance(analysis, list):
                         analysis = analysis[0]
 
                     # Get the most dominant emotion
-                    emotion = analysis['dominant_emotion']
+                    emotion = analysis["dominant_emotion"]
 
-                    # Add current detected emotion to list (only iif its different to the last one added)
+                    # Add current detected emotion to list (only if different from last one)
                     if len(emotion_history) == 0 or emotion_history[-1] != emotion:
                         emotion_history.append(emotion)
 
@@ -84,17 +88,17 @@ def start_emotionDetection():
                     emotion = "Error detecting emotion"
 
             # Calculate and display FPS
-            fps = 1 / (time.time() - start_time + 1e-5)  # Small delta to avoid division by zero
-            cv2.putText(frame, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+            fps = 1 / (time.time() - start_time + 1e-5)
+            cv2.putText(frame, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, font_color, 2)
 
             # Display detected emotion on video feed
-            cv2.putText(frame, f"Emotion: {emotion}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            cv2.putText(frame, f"Emotion: {emotion}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, font_color, 2)
 
             # Show the video feed
             cv2.imshow("Webcam Feed", frame)
 
             # Exit loop when 'q' is pressed
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
     finally:
         # Cleanup resources
@@ -106,6 +110,8 @@ def start_emotionDetection():
 
 # Function to see settings for 'EmotionLens'
 def settings_emotionLens():
+    global bounding_box_color, font_color
+
     # Clear existing widgets in the window
     for widget in root.winfo_children():
         widget.destroy()
@@ -114,28 +120,54 @@ def settings_emotionLens():
     settings_frame = tk.Frame(root)
     settings_frame.pack(pady=20)
 
-    # Add settings options
-    boundingBox_label = tk.Label(settings_frame, text="Change colour of bounding box:", font=("Helvetica", 12))
+    # Bounding Box Color Selection
+    boundingBox_label = tk.Label(settings_frame, text="Change bounding box color:", font=("Helvetica", 12))
     boundingBox_label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
-    boundingBox_color = ttk.Combobox(settings_frame, values=["Blue", "Red", "Green", "Yellow"])
-    boundingBox_color.grid(row=0, column=1, padx=10, pady=5)
 
-    fontColour_label = tk.Label(settings_frame, text="Change font colour:", font=("Helvetica", 12))
-    fontColour_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
-    fontColour_color = ttk.Combobox(settings_frame, values=["White", "Black", "Red", "Green"])
-    fontColour_color.grid(row=1, column=1, padx=10, pady=5)
+    boundingBox_color_combobox = ttk.Combobox(
+        settings_frame, values=["Blue", "Red", "Green", "Yellow"], state="readonly"
+    )
+    boundingBox_color_combobox.grid(row=0, column=1, padx=10, pady=5)
+    boundingBox_color_combobox.set("Blue")  # Default selection
 
-    fontSize_label = tk.Label(settings_frame, text="Change font size:", font=("Helvetica", 12))
-    fontSize_label.grid(row=2, column=0, padx=10, pady=5, sticky="w")
-    fontSize_slider = tk.Scale(settings_frame, from_=10, to=50, orient="horizontal")
-    fontSize_slider.grid(row=2, column=1, padx=10, pady=5)
+    # Font Color Selection
+    fontColor_label = tk.Label(settings_frame, text="Change font color:", font=("Helvetica", 12))
+    fontColor_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
 
-    save_button = tk.Button(settings_frame, text="Save Settings", font=("Helvetica", 12), command=lambda: print("Settings Saved"))
-    save_button.grid(row=3, column=0, columnspan=2, pady=20)
+    fontColor_color_combobox = ttk.Combobox(
+        settings_frame, values=["White", "Black", "Red", "Green"], state="readonly"
+    )
+    fontColor_color_combobox.grid(row=1, column=1, padx=10, pady=5)
+    fontColor_color_combobox.set("White")  # Default selection
 
+
+ # Save Settings Function
+    def save_settings():
+        global bounding_box_color, font_color
+
+        # Map colors to OpenCV BGR format
+        color_mapping = {
+            "Blue": (255, 0, 0),
+            "Red": (0, 0, 255),
+            "Green": (0, 255, 0),
+            "Yellow": (0, 255, 255),
+            "White": (255, 255, 255),
+            "Black": (0, 0, 0),
+        }
+
+        # Save the chosen colors
+        bounding_box_color = color_mapping[boundingBox_color_combobox.get()]
+        font_color = color_mapping[fontColor_color_combobox.get()]
+
+        print(f"Settings saved: Bounding Box Color: {bounding_box_color}, Font Color: {font_color}")
+
+    # Save Button
+    save_button = tk.Button(settings_frame, text="Save Settings", font=("Helvetica", 12), command=save_settings)
+    save_button.grid(row=2, column=0, columnspan=2, pady=20)
+
+    # Back Button
     back_button = tk.Button(settings_frame, text="Back", font=("Helvetica", 12), command=create_main_buttons)
-    back_button.grid(row=4, column=0, columnspan=2, pady=20)
-
+    back_button.grid(row=3, column=0, columnspan=2, pady=20)
 
 
 # Function to see help guide
@@ -221,7 +253,7 @@ def calibrate_camera():
     cv2.destroyWindow("Calibration")
     print(f"Camera calibration saved. Brightness: {brightness}, Contrast: {contrast}")
 
-    
+
 # Function to quit emotion detection 
 def quit_emotionLens():
     global cap  # Access the global cap variable
@@ -238,6 +270,7 @@ def create_main_buttons():
     # Clear existing widgets in the window
     for widget in root.winfo_children():
         widget.destroy()
+
     title_label = tk.Label(root, text="EmotionLens - Emotion Detection System")
     title_label.pack(pady=20)
 
@@ -246,12 +279,6 @@ def create_main_buttons():
 
     settings_button = tk.Button(root, text="Settings", command=settings_emotionLens)
     settings_button.pack(pady=10)
-
-    helpGuide_button = tk.Button(root, text="View Help Guide", command=helpGuide_emotionLens)
-    helpGuide_button.pack(pady=10)
-
-    calibrateCamera_button = tk.Button(root, text="Calibrate Camera", command=calibrate_camera)
-    calibrateCamera_button.pack(pady=10)
 
     quit_button = tk.Button(root, text="Quit", command=quit_emotionLens)
     quit_button.pack(pady=10)
