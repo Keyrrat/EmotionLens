@@ -9,7 +9,7 @@ from tkinter import ttk
 
 # Tkinter for GUI
 root=tk.Tk()
-root.title('EmotionLens - ')
+root.title('EmotionLens ')
 root.geometry("800x600") # Size of the window
 
 # Make capture a global variable
@@ -140,6 +140,13 @@ def settings_emotionLens():
     fontColor_color_combobox.grid(row=1, column=1, padx=10, pady=5)
     fontColor_color_combobox.set("White")  # Default selection
 
+    # Accessible settings
+    gui_theme = ttk.Combobox(
+        settings_frame, values=["Light", "Dark", "High Contrast"], state="readonly"
+    )
+    gui_theme.grid(row=0, column=1, padx=10, pady=5)
+    gui_theme.set("Light")  # Default selection
+
 
  # Save Settings Function
     def save_settings():
@@ -262,7 +269,6 @@ def quit_emotionLens():
         cap.release()
     cv2.destroyAllWindows()  # Close OpenCV windows
     root.quit()  # Exit the Tkinter mainloop
-
 
 
 
