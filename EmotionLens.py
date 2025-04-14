@@ -217,38 +217,25 @@ def settings_emotionLens():
     settings_frame.pack(pady=20)
 
     # Bounding Box Color Selection
-    boundingBox_label = tk.Label(settings_frame, text="Change bounding box color:", font=("Helvetica", 12))
-    boundingBox_label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
-
-    boundingBox_color_combobox = ttk.Combobox(
-        settings_frame, values=["Blue", "Red", "Green", "Yellow"], state="readonly"
-    )
+    tk.Label(settings_frame, text="Change bounding box color:", font=("Helvetica", 12)).grid(row=0, column=0, padx=10, pady=5, sticky="w")
+    boundingBox_color_combobox = ttk.Combobox(settings_frame, values=["White", "Black", "Red", "Green", "Blue", "Yellow"], state="readonly")
     boundingBox_color_combobox.grid(row=0, column=1, padx=10, pady=5)
-    boundingBox_color_combobox.set("Blue")  # Default selection
+    boundingBox_color_combobox.set("Blue")  # Default
 
     # Font Color Selection
-    fontColor_label = tk.Label(settings_frame, text="Change font color:", font=("Helvetica", 12))
-    fontColor_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
-
-    fontColor_color_combobox = ttk.Combobox(
-        settings_frame, values=["White", "Black", "Red", "Green"], state="readonly"
-    )
+    tk.Label(settings_frame, text="Change font color:", font=("Helvetica", 12)).grid(row=1, column=0, padx=10, pady=5, sticky="w")
+    fontColor_color_combobox = ttk.Combobox(settings_frame, values=["White", "Black", "Red", "Green", "Blue", "Yellow"], state="readonly")
     fontColor_color_combobox.grid(row=1, column=1, padx=10, pady=5)
-    fontColor_color_combobox.set("White")  # Default selection
+    fontColor_color_combobox.set("White")  # Default
 
-    # Accessible settings
-    gui_theme = ttk.Combobox(
-        settings_frame, values=["Light", "Dark", "High Contrast"], state="readonly"
-    )
-    gui_theme.grid(row=0, column=1, padx=10, pady=5)
-    gui_theme.set("Light")  # Default selection
-
-
- # Save Settings Function
+    # GUI Theme Selection
+    tk.Label(settings_frame, text="Select GUI Theme:", font=("Helvetica", 12)).grid(row=2, column=0, padx=10, pady=5, sticky="w")
+    gui_theme_combobox = ttk.Combobox(settings_frame, values=["Light", "Dark", "High Contrast"], state="readonly")
+    gui_theme_combobox.grid(row=2, column=1, padx=10, pady=5)
+    gui_theme_combobox.set("Light")  # Default
+    
+    # Save Settings Function
     def save_settings():
-        global bounding_box_color, font_color
-
-        # Map colors to OpenCV BGR format
         color_mapping = {
             "Blue": (255, 0, 0),
             "Red": (0, 0, 255),
@@ -258,19 +245,34 @@ def settings_emotionLens():
             "Black": (0, 0, 0),
         }
 
-        # Save the chosen colors
+        gui_style_mapping = {
+            "Light": {"bg": "#f0f0f0", "fg": "black"},
+            "Dark": {"bg": "#2e2e2e", "fg": "white"},
+            "High Contrast": {"bg": "black", "fg": "yellow"},
+        }
+
+        # Save selected options
+        selected_theme = gui_theme_combobox.get()
         bounding_box_color = color_mapping[boundingBox_color_combobox.get()]
         font_color = color_mapping[fontColor_color_combobox.get()]
+        style = gui_style_mapping[selected_theme]
 
-        print(f"Settings saved: Bounding Box Color: {bounding_box_color}, Font Color: {font_color}")
+        # Apply theme
+        root.configure(bg=style["bg"])
+        for widget in root.winfo_children():
+            try:
+                widget.configure(bg=style["bg"], fg=style["fg"])
+            except:
+                pass
 
-    # Save Button
-    save_button = tk.Button(settings_frame, text="Save Settings", font=("Helvetica", 12), command=save_settings)
-    save_button.grid(row=2, column=0, columnspan=2, pady=20)
+        print(f"Settings saved: Box Color={bounding_box_color}, Font Color={font_color}, Theme={selected_theme}")
 
-    # Back Button
-    back_button = tk.Button(settings_frame, text="Back", font=("Helvetica", 12), command=create_main_buttons)
-    back_button.grid(row=3, column=0, columnspan=2, pady=20)
+    # Buttons
+    button_frame = tk.Frame(root)
+    button_frame.pack(pady=10)
+
+    tk.Button(button_frame, text="Save Settings", font=("Helvetica", 12), command=save_settings).pack(side="left", padx=10)
+    tk.Button(button_frame, text="Back", font=("Helvetica", 12), command=create_main_buttons).pack(side="left", padx=10)
 
 
 
