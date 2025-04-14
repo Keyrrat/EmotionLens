@@ -204,6 +204,7 @@ def start_screen_emotionDetection():
         print("Monitor detection closed. Program exited.")
 
 
+
 # Function to see settings for 'EmotionLens'
 def settings_emotionLens():
     global bounding_box_color, font_color
@@ -233,6 +234,12 @@ def settings_emotionLens():
     gui_theme_combobox = ttk.Combobox(settings_frame, values=["Light", "Dark", "High Contrast"], state="readonly")
     gui_theme_combobox.grid(row=2, column=1, padx=10, pady=5)
     gui_theme_combobox.set("Light")  # Default
+
+    # Resolution
+    tk.Label(settings_frame, text="Select monitor resolution (NOT WORKING):", font=("Helvetica", 12)).grid(row=3, column=0, padx=10, pady=5, sticky="w")
+    monitor_resolution_combobox = ttk.Combobox(settings_frame, values=["1080 x 1920", "2560 x 1440", "3840 x 2160"], state="readonly")
+    monitor_resolution_combobox.grid(row=3, column=1, padx=10, pady=5)
+    monitor_resolution_combobox.set("1080 x 1920")  # Default
     
     # Save Settings Function
     def save_settings():
@@ -265,7 +272,7 @@ def settings_emotionLens():
             except:
                 pass
 
-        print(f"Settings saved: Box Color={bounding_box_color}, Font Color={font_color}, Theme={selected_theme}")
+        print(f"Settings saved: Box Color={bounding_box_color}, Font Color={font_color}, Theme={selected_theme}, Resolution=")
 
     # Buttons
     button_frame = tk.Frame(root)
