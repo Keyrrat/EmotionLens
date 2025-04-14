@@ -1,11 +1,22 @@
 # Imports
-
 import cv2 # OpenCV for video processing
-import numpy # For mathematical operations
+import numpy as np # For mathematical operations
 import time # For FPS calculation
 from deepface import DeepFace # For emotion detecting (DeepFace is the dataset)
 import tkinter as tk # For the GUI
 from tkinter import ttk
+import threading # For program windows to run concurrently
+import mss # Multi-Screen Shot for screen processing
+# win32 packages for screen processing
+import win32gui
+import win32con
+import pygetwindow as gw
+
+'''
+------------------------------------------------------------
+Limited to Windows only, can't be used on mac or Linux
+------------------------------------------------------------
+'''
 
 # Tkinter for GUI
 root=tk.Tk()
@@ -108,6 +119,91 @@ def start_emotionDetection():
 
 
 
+# Function to detect faces on screen to start emotion detection
+def start_screen_emotionDetection():
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    emotion_history = []
+    sct = mss.mss()
+    monitor = sct.monitors[1]  # Primary monitor
+
+    # Create a transparent overlay window
+    overlay = np.zeros((1080, 1920, 4), dtype=np.uint8)  # Adjust to your screen resolution
+    cv2.namedWindow("EmotionLens Overlay", cv2.WINDOW_NORMAL) # Basic window
+    cv2.setWindowProperty("EmotionLens Overlay", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN) # fULLSCREEN WINDOW FOR OVERLAY
+    cv2.setWindowProperty("EmotionLens Overlay", cv2.WND_PROP_TOPMOST, 1) # Top-most layered window
+
+    # Make the window transparent and click-through
+    hwnd = win32gui.FindWindow(None, "EmotionLens Overlay")
+    win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE,
+                          win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) | # Preserve existing style
+                          win32con.WS_EX_LAYERED | # Add transparency
+                          win32con.WS_EX_TRANSPARENT) # Transparnet window ignores mouse clicks and doesnt interfere with other windows and/or screen
+    win32gui.SetLayeredWindowAttributes(hwnd, 0, 0, win32con.LWA_COLORKEY) # Color key 0 = transparent
+
+    # Process monitor feed
+    try:
+        while True:
+            start_time = time.time() # Start time for FPS calculation
+            screen = np.array(sct.grab(monitor)) # Monitor feed
+            frame = cv2.cvtColor(screen, cv2.COLOR_BGRA2BGR) # Frame
+            # Convert the frame to grayscale for Haar Cascade
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            # Detect faces using Haar Cascade
+            faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+
+            # Clear overlay before drawing new elements
+            overlay.fill(0)
+
+            # Initialise emotion as "No face detected"
+            emotion = "No face detected"
+
+            # Process each detected face
+            for (x, y, w, h) in faces:
+                # Draw rectangle with selected bounding box color
+                cv2.rectangle(overlay, (x, y), (x + w, y + h), (255, 0, 0, 255), 2)
+
+                # Crop the face region
+                face_roi = frame[y:y + h, x:x + w]
+
+                # Perform DeepFace emotion detection
+                try:
+                    analysis = DeepFace.analyze(face_roi, actions=["emotion"], enforce_detection=False)
+
+                    # If `analysis` is a list, extract the first result
+                    if isinstance(analysis, list):
+                        analysis = analysis[0]
+
+                    # Get the most dominant emotion
+                    emotion = analysis["dominant_emotion"]
+
+                    # Add current detected emotion to list (only if different from last one)
+                    if len(emotion_history) == 0 or emotion_history[-1] != emotion:
+                        emotion_history.append(emotion)
+
+                except Exception as e:
+                    print("DeepFace error:", str(e))
+                    emotion = "Error detecting emotion"
+
+            # Calculate and display FPS
+            fps = 1 / (time.time() - start_time + 1e-5)
+            cv2.putText(overlay, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, font_color, 2)
+
+            # Display detected emotion on overlay
+            cv2.putText(overlay, f"Emotion: {emotion}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, font_color, 2)
+
+            # Update overlay
+            cv2.imshow("EmotionLens Overlay", overlay)
+
+            # Exit loop when 'q' is pressed ONLY WORKS WHEN OVERLAY WINDOW IS MANUALLY SELECTED IN TASKBAR
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+    finally:
+        # Cleanup resources
+        cv2.destroyAllWindows()
+        print("Monitor detection closed. Program exited.")
+
+
 # Function to see settings for 'EmotionLens'
 def settings_emotionLens():
     global bounding_box_color, font_color
@@ -175,6 +271,7 @@ def settings_emotionLens():
     # Back Button
     back_button = tk.Button(settings_frame, text="Back", font=("Helvetica", 12), command=create_main_buttons)
     back_button.grid(row=3, column=0, columnspan=2, pady=20)
+
 
 
 # Function to see help guide
@@ -262,6 +359,7 @@ def calibrate_camera():
     print(f"Camera calibration saved. Brightness: {brightness}, Contrast: {contrast}")
 
 
+
 # Function to quit emotion detection 
 def quit_emotionLens():
     global cap  # Access the global cap variable
@@ -269,6 +367,7 @@ def quit_emotionLens():
         cap.release()
     cv2.destroyAllWindows()  # Close OpenCV windows
     root.quit()  # Exit the Tkinter mainloop
+    root.destroy() # Complete termination
 
 
 
@@ -282,6 +381,9 @@ def create_main_buttons():
     title_label.pack(pady=20)
 
     start_button = tk.Button(root, text="Start Emotion Detection", command=start_emotionDetection)
+    start_button.pack(pady=10)
+
+    start_button = tk.Button(root, text="Detect Emotion From Screen", command=start_screen_emotionDetection)
     start_button.pack(pady=10)
 
     settings_button = tk.Button(root, text="Settings", command=settings_emotionLens)
