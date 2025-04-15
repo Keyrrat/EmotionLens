@@ -11,6 +11,9 @@ import mss # Multi-Screen Shot for screen processing
 import win32gui
 import win32con
 import pygetwindow as gw
+import win32api # To get screen resolution automatically
+from configparser import ConfigParser # 
+import os
 
 '''
 ------------------------------------------------------------
@@ -20,8 +23,24 @@ Limited to Windows only, can't be used on mac or Linux
 
 # Tkinter for GUI
 root=tk.Tk()
-root.title('EmotionLens ')
+root.title('EmotionLens ') # Window name
 root.geometry("800x600") # Size of the window
+
+
+# Read config file and get colours
+
+# Dynamically locate the config file in the same folder as the script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(script_dir, "setting_save.txt")
+
+parser = ConfigParser()
+parser.read(config_path)
+
+saved_boundingbox_color = parser.get('bounding_box_color', 'bounding_box_color')
+saved_font_color = parser.get('font_color', 'font_color')
+saved_theme = parser.get('style', 'style')
+
+
 
 # Make capture a global variable
 cap = None
@@ -31,8 +50,16 @@ brightness = 50 #defaukt brightness
 contrast = 50 #Default contrast
 
 # Global settings (defaults)
-bounding_box_color = (255, 0, 0)  # Default Blue
+bounding_box_color = (255, 255, 255)  # Default Blue
 font_color = (255, 255, 255)  # Default White
+
+# Function to get the screens resolution automatically
+def get_screen_resolution():
+    width = win32api.GetSystemMetrics(0)
+    height = win32api.GetSystemMetrics(1)
+    return width, height
+
+
 
 # Function to start emotion detection when the user clicks the start button on the GUI
 def start_emotionDetection():
@@ -125,9 +152,10 @@ def start_screen_emotionDetection():
     emotion_history = []
     sct = mss.mss()
     monitor = sct.monitors[1]  # Primary monitor
+    screen_width, screen_height = get_screen_resolution()
 
     # Create a transparent overlay window
-    overlay = np.zeros((1080, 1920, 4), dtype=np.uint8)  # Adjust to your screen resolution
+    overlay = np.zeros((screen_height, screen_width, 4), dtype=np.uint8)  # Automatically adjusts screen size to current monitor
     cv2.namedWindow("EmotionLens Overlay", cv2.WINDOW_NORMAL) # Basic window
     cv2.setWindowProperty("EmotionLens Overlay", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN) # fULLSCREEN WINDOW FOR OVERLAY
     cv2.setWindowProperty("EmotionLens Overlay", cv2.WND_PROP_TOPMOST, 1) # Top-most layered window
@@ -221,7 +249,7 @@ def settings_emotionLens():
     tk.Label(settings_frame, text="Change bounding box color:", font=("Helvetica", 12)).grid(row=0, column=0, padx=10, pady=5, sticky="w")
     boundingBox_color_combobox = ttk.Combobox(settings_frame, values=["White", "Black", "Red", "Green", "Blue", "Yellow"], state="readonly")
     boundingBox_color_combobox.grid(row=0, column=1, padx=10, pady=5)
-    boundingBox_color_combobox.set("Blue")  # Default
+    boundingBox_color_combobox.set("white")  # Default
 
     # Font Color Selection
     tk.Label(settings_frame, text="Change font color:", font=("Helvetica", 12)).grid(row=1, column=0, padx=10, pady=5, sticky="w")
@@ -241,6 +269,8 @@ def settings_emotionLens():
     monitor_resolution_combobox.grid(row=3, column=1, padx=10, pady=5)
     monitor_resolution_combobox.set("1080 x 1920")  # Default
     
+
+
     # Save Settings Function
     def save_settings():
         color_mapping = {
@@ -258,13 +288,18 @@ def settings_emotionLens():
             "High Contrast": {"bg": "black", "fg": "yellow"},
         }
 
-        # Save selected options
+        # Get selected options from comboboxes
+        selected_bb_color_name = boundingBox_color_combobox.get()
+        selected_font_color_name = fontColor_color_combobox.get()
         selected_theme = gui_theme_combobox.get()
-        bounding_box_color = color_mapping[boundingBox_color_combobox.get()]
-        font_color = color_mapping[fontColor_color_combobox.get()]
+
+        # Update global values
+        global bounding_box_color, font_color
+        bounding_box_color = color_mapping[selected_bb_color_name]
+        font_color = color_mapping[selected_font_color_name]
         style = gui_style_mapping[selected_theme]
 
-        # Apply theme
+        # Apply GUI theme colors
         root.configure(bg=style["bg"])
         for widget in root.winfo_children():
             try:
@@ -272,7 +307,15 @@ def settings_emotionLens():
             except:
                 pass
 
-        print(f"Settings saved: Box Color={bounding_box_color}, Font Color={font_color}, Theme={selected_theme}, Resolution=")
+        # Save settings to config file
+        parser.set("BoundingBoxColor", "bounding_box_color", selected_bb_color_name)
+        parser.set("FontColor", "font_color", selected_font_color_name)
+        parser.set("ThemeColor", "style", selected_theme)
+
+        with open("setting_save.txt", "w") as configfile:
+            parser.write(configfile)
+
+        print(f"Settings saved: Box Color={bounding_box_color}, Font Color={font_color}, Theme={selected_theme}")
 
     # Buttons
     button_frame = tk.Frame(root)
