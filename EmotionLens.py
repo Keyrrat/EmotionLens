@@ -24,7 +24,7 @@ Limited to Windows only, can't be used on mac or Linux
 # Tkinter for GUI
 root=tk.Tk()
 root.title('EmotionLens ') # Window name
-root.geometry("800x600") # Size of the window
+root.geometry("1000x600") # Size of the window
 
 
 # Read config file and get colours
@@ -33,25 +33,57 @@ root.geometry("800x600") # Size of the window
 script_dir = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_dir, "setting_save.txt")
 
+# Initialise config parser and settings
 parser = ConfigParser()
-parser.read(config_path)
+saved_theme = 'Light'
+saved_boundingbox_color = 'White'
+saved_font_color = 'White'
 
-saved_boundingbox_color = parser.get('bounding_box_color', 'bounding_box_color')
-saved_font_color = parser.get('font_color', 'font_color')
-saved_theme = parser.get('style', 'style')
+# Read or create config file
+try:
+    if not parser.read(config_path):
+        # Create default config
+        parser['style'] = {'style': 'Light'}
+        parser['bounding_box_color'] = {'bounding_box_color': 'White'}
+        parser['font_color'] = {'font_color': 'White'}
+        parser['camera'] = {'brightness': '50', 'contrast': '50'}
 
+        with open(config_path, 'w') as configfile:
+            parser.write(configfile)
+    else:
+        # Read existing config
+        saved_theme = parser.get('style', 'style')
+        saved_boundingbox_color = parser.get('bounding_box_color', 'bounding_box_color')
+        saved_font_color = parser.get('font_color', 'font_color')
+        brightness = int(parser.get('camera', 'brightness', fallback='50'))
+        contrast = int(parser.get('camera', 'contrast', fallback='50'))
+        
+        # Apply saved settings immediately
+        gui_style_mapping = {
+            "Light": {"bg": "#f0f0f0", "fg": "black"},
+            "Dark": {"bg": "#2e2e2e", "fg": "white"},
+            "High Contrast": {"bg": "black", "fg": "yellow"},
+        }
 
+        color_mapping = {
+            "Blue": (255, 0, 0),
+            "Red": (0, 0, 255),
+            "Green": (0, 255, 0),
+            "Yellow": (0, 255, 255),
+            "White": (255, 255, 255),
+            "Black": (0, 0, 0),
+        }
+
+        style = gui_style_mapping.get(saved_theme, {"bg": "#f0f0f0", "fg": "black"})
+        bounding_box_color = color_mapping.get(saved_boundingbox_color, (255, 255, 255))
+        font_color = color_mapping.get(saved_font_color, (255, 255, 255))
+
+        root.configure(bg=style["bg"])
+except Exception as e:
+    print(f"Error reading config: {e}")
 
 # Make capture a global variable
 cap = None
-
-# Calibration variables
-brightness = 50 #defaukt brightness
-contrast = 50 #Default contrast
-
-# Global settings (defaults)
-bounding_box_color = (255, 255, 255)  # Default Blue
-font_color = (255, 255, 255)  # Default White
 
 # Function to get the screens resolution automatically
 def get_screen_resolution():
@@ -249,27 +281,25 @@ def settings_emotionLens():
     tk.Label(settings_frame, text="Change bounding box color:", font=("Helvetica", 12)).grid(row=0, column=0, padx=10, pady=5, sticky="w")
     boundingBox_color_combobox = ttk.Combobox(settings_frame, values=["White", "Black", "Red", "Green", "Blue", "Yellow"], state="readonly")
     boundingBox_color_combobox.grid(row=0, column=1, padx=10, pady=5)
-    boundingBox_color_combobox.set("white")  # Default
+    boundingBox_color_combobox.set(saved_boundingbox_color)
 
     # Font Color Selection
     tk.Label(settings_frame, text="Change font color:", font=("Helvetica", 12)).grid(row=1, column=0, padx=10, pady=5, sticky="w")
     fontColor_color_combobox = ttk.Combobox(settings_frame, values=["White", "Black", "Red", "Green", "Blue", "Yellow"], state="readonly")
     fontColor_color_combobox.grid(row=1, column=1, padx=10, pady=5)
-    fontColor_color_combobox.set("White")  # Default
+    fontColor_color_combobox.set(saved_font_color)
 
     # GUI Theme Selection
     tk.Label(settings_frame, text="Select GUI Theme:", font=("Helvetica", 12)).grid(row=2, column=0, padx=10, pady=5, sticky="w")
     gui_theme_combobox = ttk.Combobox(settings_frame, values=["Light", "Dark", "High Contrast"], state="readonly")
     gui_theme_combobox.grid(row=2, column=1, padx=10, pady=5)
-    gui_theme_combobox.set("Light")  # Default
+    gui_theme_combobox.set(saved_theme)
 
     # Resolution
     tk.Label(settings_frame, text="Select monitor resolution (NOT WORKING):", font=("Helvetica", 12)).grid(row=3, column=0, padx=10, pady=5, sticky="w")
     monitor_resolution_combobox = ttk.Combobox(settings_frame, values=["1080 x 1920", "2560 x 1440", "3840 x 2160"], state="readonly")
     monitor_resolution_combobox.grid(row=3, column=1, padx=10, pady=5)
     monitor_resolution_combobox.set("1080 x 1920")  # Default
-    
-
 
     # Save Settings Function
     def save_settings():
@@ -308,11 +338,11 @@ def settings_emotionLens():
                 pass
 
         # Save settings to config file
-        parser.set("BoundingBoxColor", "bounding_box_color", selected_bb_color_name)
-        parser.set("FontColor", "font_color", selected_font_color_name)
-        parser.set("ThemeColor", "style", selected_theme)
+        parser['bounding_box_color'] = {'bounding_box_color': selected_bb_color_name}
+        parser['font_color'] = {'font_color': selected_font_color_name}
+        parser['style'] = {'style': selected_theme}
 
-        with open("setting_save.txt", "w") as configfile:
+        with open(config_path, 'w') as configfile:
             parser.write(configfile)
 
         print(f"Settings saved: Box Color={bounding_box_color}, Font Color={font_color}, Theme={selected_theme}")
@@ -322,8 +352,8 @@ def settings_emotionLens():
     button_frame.pack(pady=10)
 
     tk.Button(button_frame, text="Save Settings", font=("Helvetica", 12), command=save_settings).pack(side="left", padx=10)
+    tk.Button(button_frame, text="Calibrate Camera", font=("Helvetica", 12), command=calibrate_camera).pack(side="left", padx=10)
     tk.Button(button_frame, text="Back", font=("Helvetica", 12), command=create_main_buttons).pack(side="left", padx=10)
-
 
 
 # Function to see help guide
@@ -344,7 +374,7 @@ def helpGuide_emotionLens():
     This application helps you detect emotions in real-time using your webcam.
 
     - Start Emotion Detection: Begin detecting emotions in real time.
-    - Settings: Customize bounding box color, font size, and font color.
+    - Settings: Customise bounding box color, font size, and font color.
     - Calibrate Camera: Calibrate your camera for better accuracy.
     - Quit: Exit the application.
 
@@ -380,6 +410,8 @@ def calibrate_camera():
     # Create trackbars for brightness and contrast
     cv2.createTrackbar("Brightness", "Calibration", brightness, 100, nothing)
     cv2.createTrackbar("Contrast", "Calibration", contrast, 100, nothing)
+    cv2.setTrackbarPos("Brightness", "Calibration", brightness)
+    cv2.setTrackbarPos("Contrast", "Calibration", contrast)
 
     while True:
         ret, frame = cap.read()
@@ -409,6 +441,10 @@ def calibrate_camera():
     # Close calibration window but keep the camera open
     cv2.destroyWindow("Calibration")
     print(f"Camera calibration saved. Brightness: {brightness}, Contrast: {contrast}")
+
+    parser['camera'] = {'brightness': str(brightness), 'contrast': str(contrast)}
+    with open(config_path, 'w') as configfile:
+        parser.write(configfile)
 
 
 
@@ -443,9 +479,6 @@ def create_main_buttons():
 
     helpGuide_button = tk.Button(root, text="Help Guide", command=helpGuide_emotionLens)
     helpGuide_button.pack(pady=10)
-
-    calibrateCamera_button = tk.Button(root, text="Calibrate Camera", command=calibrate_camera)
-    calibrateCamera_button.pack(pady=10)
 
     quit_button = tk.Button(root, text="Quit", command=quit_emotionLens)
     quit_button.pack(pady=10)
