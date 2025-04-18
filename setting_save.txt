@@ -1,11 +1,11 @@
 [style]
-style = High Contrast
+style = Dark
 
 [bounding_box_color]
 bounding_box_color = White
 
 [font_color]
-font_color = Red
+font_color = White
 
 [camera]
 brightness = 50

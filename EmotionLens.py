@@ -267,8 +267,8 @@ def start_screen_emotionDetection():
 
 # Function to see settings for 'EmotionLens'
 def settings_emotionLens():
-    global bounding_box_color, font_color
-
+    global bounding_box_color, font_color, brightness, contrast
+    
     # Clear existing widgets in the window
     for widget in root.winfo_children():
         widget.destroy()
@@ -295,11 +295,11 @@ def settings_emotionLens():
     gui_theme_combobox.grid(row=2, column=1, padx=10, pady=5)
     gui_theme_combobox.set(saved_theme)
 
-    # Resolution
+    # Resolution Placeholder
     tk.Label(settings_frame, text="Select monitor resolution (NOT WORKING):", font=("Helvetica", 12)).grid(row=3, column=0, padx=10, pady=5, sticky="w")
     monitor_resolution_combobox = ttk.Combobox(settings_frame, values=["1080 x 1920", "2560 x 1440", "3840 x 2160"], state="readonly")
     monitor_resolution_combobox.grid(row=3, column=1, padx=10, pady=5)
-    monitor_resolution_combobox.set("1080 x 1920")  # Default
+    monitor_resolution_combobox.set("1080 x 1920")
 
     # Save Settings Function
     def save_settings():
@@ -324,12 +324,10 @@ def settings_emotionLens():
         selected_theme = gui_theme_combobox.get()
 
         # Update global values
-        global bounding_box_color, font_color
         bounding_box_color = color_mapping[selected_bb_color_name]
         font_color = color_mapping[selected_font_color_name]
         style = gui_style_mapping[selected_theme]
 
-        # Apply GUI theme colors
         root.configure(bg=style["bg"])
         for widget in root.winfo_children():
             try:
@@ -347,14 +345,36 @@ def settings_emotionLens():
 
         print(f"Settings saved: Box Color={bounding_box_color}, Font Color={font_color}, Theme={selected_theme}")
 
+    # Reset to Defaults Function
+    def reset_to_defaults():
+        boundingBox_color_combobox.set("White")
+        fontColor_color_combobox.set("White")
+        gui_theme_combobox.set("Light")
+
+        parser['style'] = {'style': 'Light'}
+        parser['bounding_box_color'] = {'bounding_box_color': 'White'}
+        parser['font_color'] = {'font_color': 'White'}
+        parser['camera'] = {'brightness': '50', 'contrast': '50'}
+
+        with open(config_path, 'w') as configfile:
+            parser.write(configfile)
+
+        bounding_box_color = (255, 255, 255)
+        font_color = (255, 255, 255)
+        brightness = 50
+        contrast = 50
+        root.configure(bg="#f0f0f0")
+
+        print("Settings reset to defaults.")
+
     # Buttons
     button_frame = tk.Frame(root)
     button_frame.pack(pady=10)
 
     tk.Button(button_frame, text="Save Settings", font=("Helvetica", 12), command=save_settings).pack(side="left", padx=10)
     tk.Button(button_frame, text="Calibrate Camera", font=("Helvetica", 12), command=calibrate_camera).pack(side="left", padx=10)
+    tk.Button(button_frame, text="Reset to Defaults", font=("Helvetica", 12), command=reset_to_defaults).pack(side="left", padx=10)
     tk.Button(button_frame, text="Back", font=("Helvetica", 12), command=create_main_buttons).pack(side="left", padx=10)
-
 
 # Function to see help guide
 def helpGuide_emotionLens():
