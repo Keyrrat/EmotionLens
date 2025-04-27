@@ -2,308 +2,83 @@
 import cv2 # OpenCV for video processing
 import numpy as np # For mathematical operations
 import time # For FPS calculation
-from deepface import DeepFace # For emotion detecting (DeepFace is the dataset)
-import tkinter as tk # For the GUI
-from tkinter import ttk
-import threading # For program windows to run concurrently
-import mss # Multi-Screen Shot for screen processing
+from deepface import DeepFace  # For emotion detection (DeepFace is the dataset)
+import customtkinter as ctk # For the modern GUI
+import threading # For running detection in separate threads
+import mss # Multi-Screen Shot for screen capture
 # win32 packages for screen processing
 import win32gui
 import win32con
 import pygetwindow as gw
 import win32api # To get screen resolution automatically
-from configparser import ConfigParser # 
+from configparser import ConfigParser # For saving/loading settings
 import os
 
 '''
 ------------------------------------------------------------
-Limited to Windows only, can't be used on mac or Linux
+Limited to Windows only, can't be used on Mac or Linux
 ------------------------------------------------------------
 '''
 
-# Tkinter for GUI
-root=tk.Tk()
-root.title('EmotionLens ') # Window name
-root.geometry("1000x600") # Size of the window
+# Initialise CustomTkinter for modern GUI appearance
+ctk.set_appearance_mode("System")  # Default to system theme
+ctk.set_default_color_theme("blue")  # Base theme
 
-
-# Read config file and get colours
-
-# Dynamically locate the config file in the same folder as the script
-script_dir = os.path.dirname(os.path.abspath(__file__))
-config_path = os.path.join(script_dir, "setting_save.txt")
-
-# Initialise config parser and settings
-parser = ConfigParser()
-saved_theme = 'Light'
-saved_boundingbox_color = 'White'
-saved_font_color = 'White'
-
-# Read or create config file
-try:
-    if not parser.read(config_path):
-        # Create default config
-        parser['style'] = {'style': 'Light'}
-        parser['bounding_box_color'] = {'bounding_box_color': 'White'}
-        parser['font_color'] = {'font_color': 'White'}
-        parser['camera'] = {'brightness': '50', 'contrast': '50'}
-
-        with open(config_path, 'w') as configfile:
-            parser.write(configfile)
-    else:
-        # Read existing config
-        saved_theme = parser.get('style', 'style')
-        saved_boundingbox_color = parser.get('bounding_box_color', 'bounding_box_color')
-        saved_font_color = parser.get('font_color', 'font_color')
-        brightness = int(parser.get('camera', 'brightness', fallback='50'))
-        contrast = int(parser.get('camera', 'contrast', fallback='50'))
+# Main Class
+class EmotionLensApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
         
-        # Apply saved settings immediately
-        gui_style_mapping = {
-            "Light": {"bg": "#f0f0f0", "fg": "black"},
-            "Dark": {"bg": "#2e2e2e", "fg": "white"},
-            "High Contrast": {"bg": "black", "fg": "yellow"},
-        }
-
-        color_mapping = {
-            "Blue": (255, 0, 0),
-            "Red": (0, 0, 255),
-            "Green": (0, 255, 0),
-            "Yellow": (0, 255, 255),
-            "White": (255, 255, 255),
-            "Black": (0, 0, 0),
-        }
-
-        style = gui_style_mapping.get(saved_theme, {"bg": "#f0f0f0", "fg": "black"})
-        bounding_box_color = color_mapping.get(saved_boundingbox_color, (255, 255, 255))
-        font_color = color_mapping.get(saved_font_color, (255, 255, 255))
-
-        root.configure(bg=style["bg"])
-except Exception as e:
-    print(f"Error reading config: {e}")
-
-# Make capture a global variable
-cap = None
-
-# Function to get the screens resolution automatically
-def get_screen_resolution():
-    width = win32api.GetSystemMetrics(0)
-    height = win32api.GetSystemMetrics(1)
-    return width, height
-
-
-
-# Function to start emotion detection when the user clicks the start button on the GUI
-def start_emotionDetection():
-
-# Turn on Camera
-    global cap, bounding_box_color, font_color  # Access the global cap variable
-    cap = cv2.VideoCapture(0)  # Open Webcam
-    if not cap.isOpened():
-        print("Error: Could not open webcam.")
-        exit()
-
-    # Load Haar Cascade for face detection
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-
-    # List for previous emotions
-    emotion_history = []
-
-    # Process webcam feed
-    try:
-        while True:
-            start_time = time.time()  # Start time for FPS calculation
-            ret, frame = cap.read()
-            if not ret:
-                print("Error: Failed to capture image")
-                return
-
-            # Mirror the frame
-            frame = cv2.flip(frame, 1)  # Flip horizontally
-
-            # Convert the frame to grayscale for Haar Cascade
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-            # Detect faces using Haar Cascade
-            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-
-            # Initialise emotion as "No face detected"
-            emotion = "No face detected"
-
-            # Process each detected face
-            for (x, y, w, h) in faces:
-                # Draw rectangle with selected bounding box color
-                cv2.rectangle(frame, (x, y), (x + w, y + h), bounding_box_color, 2)
-
-                # Crop the face region
-                face_roi = frame[y:y + h, x:x + w]
-
-                # Perform DeepFace emotion detection
-                try:
-                    analysis = DeepFace.analyze(face_roi, actions=["emotion"], enforce_detection=False)
-
-                    # If `analysis` is a list, extract the first result
-                    if isinstance(analysis, list):
-                        analysis = analysis[0]
-
-                    # Get the most dominant emotion
-                    emotion = analysis["dominant_emotion"]
-
-                    # Add current detected emotion to list (only if different from last one)
-                    if len(emotion_history) == 0 or emotion_history[-1] != emotion:
-                        emotion_history.append(emotion)
-
-                except Exception as e:
-                    print("DeepFace error:", str(e))
-                    emotion = "Error detecting emotion"
-
-            # Calculate and display FPS
-            fps = 1 / (time.time() - start_time + 1e-5)
-            cv2.putText(frame, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, font_color, 2)
-
-            # Display detected emotion on video feed
-            cv2.putText(frame, f"Emotion: {emotion}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, font_color, 2)
-
-            # Show the video feed
-            cv2.imshow("Webcam Feed", frame)
-
-            # Exit loop when 'q' is pressed
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
-    finally:
-        # Cleanup resources
-        cap.release()
-        cv2.destroyAllWindows()
-        print("Webcam closed. Program exited.")
-
-
-
-# Function to detect faces on screen to start emotion detection
-def start_screen_emotionDetection():
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    emotion_history = []
-    sct = mss.mss()
-    monitor = sct.monitors[1]  # Primary monitor
-    screen_width, screen_height = get_screen_resolution()
-
-    # Create a transparent overlay window
-    overlay = np.zeros((screen_height, screen_width, 4), dtype=np.uint8)  # Automatically adjusts screen size to current monitor
-    cv2.namedWindow("EmotionLens Overlay", cv2.WINDOW_NORMAL) # Basic window
-    cv2.setWindowProperty("EmotionLens Overlay", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN) # fULLSCREEN WINDOW FOR OVERLAY
-    cv2.setWindowProperty("EmotionLens Overlay", cv2.WND_PROP_TOPMOST, 1) # Top-most layered window
-
-    # Make the window transparent and click-through
-    hwnd = win32gui.FindWindow(None, "EmotionLens Overlay")
-    win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE,
-                          win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) | # Preserve existing style
-                          win32con.WS_EX_LAYERED | # Add transparency
-                          win32con.WS_EX_TRANSPARENT) # Transparnet window ignores mouse clicks and doesnt interfere with other windows and/or screen
-    win32gui.SetLayeredWindowAttributes(hwnd, 0, 0, win32con.LWA_COLORKEY) # Color key 0 = transparent
-
-    # Process monitor feed
-    try:
-        while True:
-            start_time = time.time() # Start time for FPS calculation
-            screen = np.array(sct.grab(monitor)) # Monitor feed
-            frame = cv2.cvtColor(screen, cv2.COLOR_BGRA2BGR) # Frame
-            # Convert the frame to grayscale for Haar Cascade
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-            # Detect faces using Haar Cascade
-            faces = face_cascade.detectMultiScale(gray, 1.1, 5)
-
-            # Clear overlay before drawing new elements
-            overlay.fill(0)
-
-            # Initialise emotion as "No face detected"
-            emotion = "No face detected"
-
-            # Process each detected face
-            for (x, y, w, h) in faces:
-                # Draw rectangle with selected bounding box color
-                cv2.rectangle(overlay, (x, y), (x + w, y + h), (255, 0, 0, 255), 2)
-
-                # Crop the face region
-                face_roi = frame[y:y + h, x:x + w]
-
-                # Perform DeepFace emotion detection
-                try:
-                    analysis = DeepFace.analyze(face_roi, actions=["emotion"], enforce_detection=False)
-
-                    # If `analysis` is a list, extract the first result
-                    if isinstance(analysis, list):
-                        analysis = analysis[0]
-
-                    # Get the most dominant emotion
-                    emotion = analysis["dominant_emotion"]
-
-                    # Add current detected emotion to list (only if different from last one)
-                    if len(emotion_history) == 0 or emotion_history[-1] != emotion:
-                        emotion_history.append(emotion)
-
-                except Exception as e:
-                    print("DeepFace error:", str(e))
-                    emotion = "Error detecting emotion"
-
-            # Calculate and display FPS
-            fps = 1 / (time.time() - start_time + 1e-5)
-            cv2.putText(overlay, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, font_color, 2)
-
-            # Display detected emotion on overlay
-            cv2.putText(overlay, f"Emotion: {emotion}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, font_color, 2)
-
-            # Update overlay
-            cv2.imshow("EmotionLens Overlay", overlay)
-
-            # Exit loop when 'q' is pressed ONLY WORKS WHEN OVERLAY WINDOW IS MANUALLY SELECTED IN TASKBAR
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
-    finally:
-        # Cleanup resources
-        cv2.destroyAllWindows()
-        print("Monitor detection closed. Program exited.")
-
-
-
-# Function to see settings for 'EmotionLens'
-def settings_emotionLens():
-    global bounding_box_color, font_color, brightness, contrast
+        # Window configuration
+        self.title('EmotionLens')  # Window title
+        self.geometry("1000x600")  # Initial window size
+        self.minsize(800, 500)  # Minimum window size
+        
+        # Initialize variables with default values
+        self.cap = None  # Video capture object
+        self.bounding_box_colour = (255, 255, 255)  # BGR format for OpenCV
+        self.font_colour = (255, 255, 255)  # Text colour for display
+        self.brightness = 50  # Default camera brightness (0-100)
+        self.contrast = 50  # Default camera contrast (0-100)
+        self.mode_var = ctk.StringVar(value="camera")  # Track detection mode
+        
+        # Configuration file handling
+        self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setting_save.txt")
+        self.parser = ConfigParser()
+        self.load_config()  # Load or create config file
+        
+        # Build the user interface
+        self.create_main_ui()
+        
+    def load_config(self):
+        # Load or create configuration file with saved settings
+        try:
+            if not self.parser.read(self.config_path):
+                # Create default config if file doesn't exist
+                self.parser['style'] = {'style': 'System'}
+                self.parser['bounding_box_colour'] = {'bounding_box_colour': 'White'}
+                self.parser['font_colour'] = {'font_colour': 'White'}
+                self.parser['camera'] = {'brightness': '50', 'contrast': '50'}
+                self.parser['detection'] = {'mode': 'camera'}
+                
+                with open(self.config_path, 'w') as configfile:
+                    self.parser.write(configfile)
+            else:
+                # Read existing config and apply settings
+                saved_theme = self.parser.get('style', 'style', fallback='System')
+                ctk.set_appearance_mode(saved_theme)
+                
+                self.bounding_box_colour = self.get_colour_from_name(self.parser.get('bounding_box_colour', 'bounding_box_colour', fallback='White'))
+                self.font_colour = self.get_colour_from_name(self.parser.get('font_colour', 'font_colour', fallback='White'))
+                self.brightness = int(self.parser.get('camera', 'brightness', fallback='50'))
+                self.contrast = int(self.parser.get('camera', 'contrast', fallback='50'))
+                self.mode_var.set(self.parser.get('detection', 'mode', fallback='camera'))
+        except Exception as e:
+            print(f"Error reading config: {e}")
     
-    # Clear existing widgets in the window
-    for widget in root.winfo_children():
-        widget.destroy()
-
-    # Create a settings frame
-    settings_frame = tk.Frame(root)
-    settings_frame.pack(pady=20)
-
-    # Bounding Box Color Selection
-    tk.Label(settings_frame, text="Change bounding box color:", font=("Helvetica", 12)).grid(row=0, column=0, padx=10, pady=5, sticky="w")
-    boundingBox_color_combobox = ttk.Combobox(settings_frame, values=["White", "Black", "Red", "Green", "Blue", "Yellow"], state="readonly")
-    boundingBox_color_combobox.grid(row=0, column=1, padx=10, pady=5)
-    boundingBox_color_combobox.set(saved_boundingbox_color)
-
-    # Font Color Selection
-    tk.Label(settings_frame, text="Change font color:", font=("Helvetica", 12)).grid(row=1, column=0, padx=10, pady=5, sticky="w")
-    fontColor_color_combobox = ttk.Combobox(settings_frame, values=["White", "Black", "Red", "Green", "Blue", "Yellow"], state="readonly")
-    fontColor_color_combobox.grid(row=1, column=1, padx=10, pady=5)
-    fontColor_color_combobox.set(saved_font_color)
-
-    # GUI Theme Selection
-    tk.Label(settings_frame, text="Select GUI Theme:", font=("Helvetica", 12)).grid(row=2, column=0, padx=10, pady=5, sticky="w")
-    gui_theme_combobox = ttk.Combobox(settings_frame, values=["Light", "Dark", "High Contrast"], state="readonly")
-    gui_theme_combobox.grid(row=2, column=1, padx=10, pady=5)
-    gui_theme_combobox.set(saved_theme)
-
-    # Resolution Placeholder
-    tk.Label(settings_frame, text="Select monitor resolution (NOT WORKING):", font=("Helvetica", 12)).grid(row=3, column=0, padx=10, pady=5, sticky="w")
-    monitor_resolution_combobox = ttk.Combobox(settings_frame, values=["1080 x 1920", "2560 x 1440", "3840 x 2160"], state="readonly")
-    monitor_resolution_combobox.grid(row=3, column=1, padx=10, pady=5)
-    monitor_resolution_combobox.set("1080 x 1920")
-
-    # Save Settings Function
-    def save_settings():
-        color_mapping = {
+    def get_colour_from_name(self, colour_name):
+        # OpenCV uses BGR format
+        colour_mapping = {
             "Blue": (255, 0, 0),
             "Red": (0, 0, 255),
             "Green": (0, 255, 0),
@@ -311,200 +86,373 @@ def settings_emotionLens():
             "White": (255, 255, 255),
             "Black": (0, 0, 0),
         }
+        return colour_mapping.get(colour_name, (255, 255, 255))  # Default white
+    
+    def create_main_ui(self):
+        # Create the main user interface with tabs
+        # Clear existing widgets if any
+        for widget in self.winfo_children():
+            widget.destroy()
+        
+        # Create tabbed interface
+        self.tabview = ctk.CTkTabview(self)
+        self.tabview.pack(padx=20, pady=20, fill="both", expand=True)
+        
+        # Add tabs for different sections
+        self.tabview.add("Main")  # Main detection controls
+        self.tabview.add("Settings")  # Configuration options
+        self.tabview.add("Help")  # User guide
+        
+        # Build each tab's content
+        self.create_main_tab()
+        self.create_settings_tab()
+        self.create_help_tab()
+    
+    def create_main_tab(self):
+        # Create content for the main detection tab
+        tab = self.tabview.tab("Main")
+        
+        # Application title
+        title = ctk.CTkLabel(tab, text="EmotionLens - Emotion Detection System", font=ctk.CTkFont(size=20, weight="bold"))
+        title.pack(pady=20)
+        
+        # Detection mode selection (camera or screen)
+        mode_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        mode_frame.pack(pady=10)
+        
+        # Segmented button with persistent highlighting
+        mode_segment = ctk.CTkSegmentedButton(
+            mode_frame,
+            values=["Camera", "Screen"],
+            variable=self.mode_var,
+            command=self.update_mode_selection,
+            selected_color=("#3B8ED0", "#1F6AA5"),  # Blue selection
+            unselected_color=("gray75", "gray30"),    # Gray unselected
+            selected_hover_color=("#36719F", "#1A5D8A"),
+            font=ctk.CTkFont(weight="bold")
+        )
+        # Set current selection from config
+        mode_segment.set("Camera" if self.mode_var.get() == "camera" else "Screen")
+        mode_segment.pack(pady=5)
+        
+        # Main detection start button
+        start_btn = ctk.CTkButton(
+            tab,
+            text="▶ Start Detection",
+            command=self.start_detection,
+            height=40,
+            font=ctk.CTkFont(size=16, weight="bold"),
+            fg_color="#2FA572",  # Green color for "go"
+            hover_color="#3DBA7C"
+        )
+        start_btn.pack(pady=20, ipadx=20, ipady=10)
 
-        gui_style_mapping = {
-            "Light": {"bg": "#f0f0f0", "fg": "black"},
-            "Dark": {"bg": "#2e2e2e", "fg": "white"},
-            "High Contrast": {"bg": "black", "fg": "yellow"},
+    def update_mode_selection(self, selected_display):
+        """Convert display text to internal values and save to config"""
+        internal_value = "camera" if selected_display == "Camera" else "screen"
+        self.mode_var.set(internal_value)
+        
+        # Save to config file
+        self.parser['detection'] = {'mode': internal_value}
+        with open(self.config_path, 'w') as configfile:
+            self.parser.write(configfile)
+
+    def create_settings_tab(self):
+        # Create content for the settings configuration tab
+        tab = self.tabview.tab("Settings")
+        
+        # Scrollable frame for settings options
+        settings_frame = ctk.CTkScrollableFrame(tab)
+        settings_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Appearance settings section
+        appearance_label = ctk.CTkLabel(settings_frame, text="Appearance", font=ctk.CTkFont(weight="bold"))
+        appearance_label.pack(pady=(0, 10), anchor="w")
+        
+        # Theme selection dropdown
+        theme_label = ctk.CTkLabel(settings_frame, text="Interface Theme:")
+        theme_label.pack(anchor="w", pady=(5, 0))
+        
+        self.theme_var = ctk.StringVar(value=ctk.get_appearance_mode())
+        theme_menu = ctk.CTkOptionMenu(settings_frame, values=["Light", "Dark", "System"], variable=self.theme_var, command=self.change_theme)
+        theme_menu.pack(fill="x", pady=(0, 10))
+        
+        # Detection display settings section
+        detection_label = ctk.CTkLabel(settings_frame, text="Detection Settings", font=ctk.CTkFont(weight="bold"))
+        detection_label.pack(pady=(10, 10), anchor="w")
+        
+        # Bounding box colour selection
+        bb_colour_label = ctk.CTkLabel(settings_frame, text="Bounding Box Colour:")
+        bb_colour_label.pack(anchor="w", pady=(5, 0))
+        self.bb_colour_var = ctk.StringVar(value=self.get_colour_name(self.bounding_box_colour))
+        bb_colour_menu = ctk.CTkOptionMenu(settings_frame, values=["White", "Black", "Red", "Green", "Blue", "Yellow"], variable=self.bb_colour_var)
+        bb_colour_menu.pack(fill="x", pady=(0, 10))
+        
+        # Text colour selection
+        font_colour_label = ctk.CTkLabel(settings_frame, text="Text Colour:")
+        font_colour_label.pack(anchor="w", pady=(5, 0))
+        self.font_colour_var = ctk.StringVar(value=self.get_colour_name(self.font_colour))
+        font_colour_menu = ctk.CTkOptionMenu(settings_frame, values=["White", "Black", "Red", "Green", "Blue", "Yellow"], variable=self.font_colour_var)
+        font_colour_menu.pack(fill="x", pady=(0, 10))
+        
+        # Camera calibration button
+        calibrate_btn = ctk.CTkButton(settings_frame, text="Calibrate Camera", command=self.calibrate_camera)
+        calibrate_btn.pack(pady=10)
+        
+        # Settings action buttons
+        save_btn = ctk.CTkButton(settings_frame, text="Save Settings", command=self.save_settings)
+        save_btn.pack(pady=10)
+        
+        reset_btn = ctk.CTkButton(settings_frame, text="Reset to Defaults", command=self.reset_settings, fg_color="transparent", border_width=1)
+        reset_btn.pack(pady=10)
+
+    def create_help_tab(self):
+        tab = self.tabview.tab("Help")
+        
+        # Help text with usage instructions
+        help_text = """
+        Welcome to EmotionLens Help Guide!
+        This application helps you detect emotions in real-time using your webcam.
+        - Start Emotion Detection: Begin detecting emotions in real time.
+        - Settings: Customise bounding box colour, font size, and font colour.
+        - Calibrate Camera: Calibrate your camera for better accuracy.
+        - Quit: Exit the application.
+        Press 'q' during emotion detection to stop the webcam.
+        """
+        help_label = ctk.CTkLabel(tab, text=help_text, justify="left")
+        help_label.pack(padx=20, pady=20, anchor="w")
+    
+    def get_colour_name(self, colour):
+        # Convert BGR tuple to colour name
+        colour_mapping = {
+            (255, 0, 0): "Blue",
+            (0, 0, 255): "Red",
+            (0, 255, 0): "Green",
+            (0, 255, 255): "Yellow",
+            (255, 255, 255): "White",
+            (0, 0, 0): "Black",
         }
+        return colour_mapping.get(tuple(colour), "White")
+    
+    def change_theme(self, new_theme):
+        # Change the application theme dynamically
+        ctk.set_appearance_mode(new_theme)
+    
+    def save_settings(self):
+        # Save current settings to config file
+        try:
+            # Update runtime settings from UI selections
+            self.bounding_box_colour = self.get_colour_from_name(self.bb_colour_var.get())
+            self.font_colour = self.get_colour_from_name(self.font_colour_var.get())
+            
+            # Save all settings to config file
+            self.parser['style'] = {'style': self.theme_var.get()}
+            self.parser['bounding_box_colour'] = {'bounding_box_colour': self.bb_colour_var.get()}
+            self.parser['font_colour'] = {'font_colour': self.font_colour_var.get()}
+            self.parser['camera'] = {'brightness': str(self.brightness), 'contrast': str(self.contrast)}
+            self.parser['detection'] = {'mode': self.mode_var.get()}
+            
+            with open(self.config_path, 'w') as configfile:
+                self.parser.write(configfile)
+            
+            print("Settings saved successfully")
+        except Exception as e:
+            print(f"Error saving settings: {e}")
+    
+    def reset_settings(self):
+        # Reset all settings to default values
+        self.theme_var.set("System")
+        self.bb_colour_var.set("White")
+        self.font_colour_var.set("White")
+        self.brightness = 50
+        self.contrast = 50
+        self.mode_var.set("camera")
+        
+        # Update runtime settings
+        self.bounding_box_colour = self.get_colour_from_name("White")
+        self.font_colour = self.get_colour_from_name("White")
+        
+        # Save defaults to config file
+        self.save_settings()
+    
+    def start_detection(self):
+        # Start emotion detection in a separate thread based on selected mode
+        mode = self.mode_var.get()
+        if mode == "camera":
+            threading.Thread(target=self.start_emotionDetection, daemon=True).start()
+        else:
+            threading.Thread(target=self.start_screen_emotionDetection, daemon=True).start()
 
-        # Get selected options from comboboxes
-        selected_bb_color_name = boundingBox_color_combobox.get()
-        selected_font_color_name = fontColor_color_combobox.get()
-        selected_theme = gui_theme_combobox.get()
-
-        # Update global values
-        bounding_box_color = color_mapping[selected_bb_color_name]
-        font_color = color_mapping[selected_font_color_name]
-        style = gui_style_mapping[selected_theme]
-
-        root.configure(bg=style["bg"])
-        for widget in root.winfo_children():
-            try:
-                widget.configure(bg=style["bg"], fg=style["fg"])
-            except:
-                pass
-
-        # Save settings to config file
-        parser['bounding_box_color'] = {'bounding_box_color': selected_bb_color_name}
-        parser['font_color'] = {'font_color': selected_font_color_name}
-        parser['style'] = {'style': selected_theme}
-
-        with open(config_path, 'w') as configfile:
-            parser.write(configfile)
-
-        print(f"Settings saved: Box Color={bounding_box_color}, Font Color={font_color}, Theme={selected_theme}")
-
-    # Reset to Defaults Function
-    def reset_to_defaults():
-        boundingBox_color_combobox.set("White")
-        fontColor_color_combobox.set("White")
-        gui_theme_combobox.set("Light")
-
-        parser['style'] = {'style': 'Light'}
-        parser['bounding_box_color'] = {'bounding_box_color': 'White'}
-        parser['font_color'] = {'font_color': 'White'}
-        parser['camera'] = {'brightness': '50', 'contrast': '50'}
-
-        with open(config_path, 'w') as configfile:
-            parser.write(configfile)
-
-        bounding_box_color = (255, 255, 255)
-        font_color = (255, 255, 255)
-        brightness = 50
-        contrast = 50
-        root.configure(bg="#f0f0f0")
-
-        print("Settings reset to defaults.")
-
-    # Buttons
-    button_frame = tk.Frame(root)
-    button_frame.pack(pady=10)
-
-    tk.Button(button_frame, text="Save Settings", font=("Helvetica", 12), command=save_settings).pack(side="left", padx=10)
-    tk.Button(button_frame, text="Calibrate Camera", font=("Helvetica", 12), command=calibrate_camera).pack(side="left", padx=10)
-    tk.Button(button_frame, text="Reset to Defaults", font=("Helvetica", 12), command=reset_to_defaults).pack(side="left", padx=10)
-    tk.Button(button_frame, text="Back", font=("Helvetica", 12), command=create_main_buttons).pack(side="left", padx=10)
-
-# Function to see help guide
-def helpGuide_emotionLens():
-    # Clear existing widgets in the window
-    for widget in root.winfo_children():
-        widget.destroy()
-
-    # Create a help guide frame (expanded to fill the window properly)
-    helpGuide_frame = tk.Frame(root)
-    helpGuide_frame.pack(expand=True, fill="both")
-
-    # Help guide info
-    helpGuide_label = tk.Label(
-        helpGuide_frame,
-        text="""
-    Welcome to EmotionLens Help Guide!
-    This application helps you detect emotions in real-time using your webcam.
-
-    - Start Emotion Detection: Begin detecting emotions in real time.
-    - Settings: Customise bounding box color, font size, and font color.
-    - Calibrate Camera: Calibrate your camera for better accuracy.
-    - Quit: Exit the application.
-
-    Press 'q' during emotion detection to stop the webcam.
-    """,
-        font=("Helvetica", 12), justify="left", anchor="w",
-    )
-    helpGuide_label.pack(pady=20, padx=20, anchor="w")
-
-    # Back button
-    back_button = tk.Button(helpGuide_frame, text="Back", font=("Helvetica", 12), command=create_main_buttons)
-    back_button.pack(pady=20)
-
-
-
-# Function to calibrate camera
-def calibrate_camera():
-    global cap, brightness, contrast
-
-    if cap is None or not cap.isOpened():
-        cap = cv2.VideoCapture(0)  # Open Webcam
-        if not cap.isOpened():
+    def start_emotionDetection(self):
+        # Perform real-time emotion detection from webcam feed
+        self.cap = cv2.VideoCapture(0)  # Open default camera
+        
+        if not self.cap.isOpened():
             print("Error: Could not open webcam.")
             return
+        
+        # Apply saved camera settings
+        self.cap.set(cv2.CAP_PROP_BRIGHTNESS, self.brightness / 100)
+        self.cap.set(cv2.CAP_PROP_CONTRAST, self.contrast / 100)
+        
+        # Load face detection classifier
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        emotion_history = []  # Track emotion changes over time
+        
+        try:
+            while True:
+                start_time = time.time()  # For FPS calculation
+                ret, frame = self.cap.read()
+                if not ret:
+                    print("Error: Failed to capture image")
+                    break
+                
+                frame = cv2.flip(frame, 1)  # Mirror the image
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+                
+                # Detect faces using Haar Cascade
+                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+                emotion = "No face detected"  # Default message
+                
+                for (x, y, w, h) in faces:
+                    # Draw bounding box around detected face
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), self.bounding_box_colour, 2)
+                    face_roi = frame[y:y + h, x:x + w]  # Extract face region
+                    
+                    try:
+                        # Analyze face for emotions using DeepFace
+                        analysis = DeepFace.analyze(face_roi, actions=["emotion"], enforce_detection=False)
+                        if isinstance(analysis, list):
+                            analysis = analysis[0]  # Take first result if multiple
+                        emotion = analysis["dominant_emotion"]
+                        
+                        # Track emotion changes
+                        if len(emotion_history) == 0 or emotion_history[-1] != emotion:
+                            emotion_history.append(emotion)
+                    except Exception as e:
+                        print("DeepFace error:", str(e))
+                        emotion = "Error detecting emotion"
+                
+                # Display performance metrics
+                fps = 1 / (time.time() - start_time + 1e-5)
+                cv2.putText(frame, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.font_colour, 2)
+                cv2.putText(frame, f"Emotion: {emotion}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.font_colour, 2)
+                
+                # Show the video feed
+                cv2.imshow("Webcam Feed", frame)
+                
+                # Exit on 'q' key press
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+        finally:
+            # Cleanup resources
+            self.cap.release()
+            cv2.destroyAllWindows()
 
-    # Create a window for calibration settings
-    cv2.namedWindow("Calibration")
+    def start_screen_emotionDetection(self):
+        # Detect emotion from screen using transparent overlay
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        emotion_history = []
+        sct = mss.mss()  # Screen capture tool
+        monitor = sct.monitors[1]  # Primary monitor
+        
+        # Get screen resolution
+        screen_width = win32api.GetSystemMetrics(0)
+        screen_height = win32api.GetSystemMetrics(1)
+        
+        # Create transparent overlay window
+        overlay = np.zeros((screen_height, screen_width, 4), dtype=np.uint8)
+        cv2.namedWindow("EmotionLens Overlay", cv2.WINDOW_NORMAL)
+        cv2.setWindowProperty("EmotionLens Overlay", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.setWindowProperty("EmotionLens Overlay", cv2.WND_PROP_TOPMOST, 1)
+        
+        # Configure window transparency properties
+        hwnd = win32gui.FindWindow(None, "EmotionLens Overlay")
+        win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) | win32con.WS_EX_LAYERED | win32con.WS_EX_TRANSPARENT)
+        win32gui.SetLayeredWindowAttributes(hwnd, 0, 0, win32con.LWA_COLORKEY)
+        
+        try:
+            while True:
+                start_time = time.time()
+                screen = np.array(sct.grab(monitor))  # Capture screen
+                frame = cv2.cvtColor(screen, cv2.COLOR_BGRA2BGR)
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+                overlay.fill(0)  # Clear previous frame
+                emotion = "No face detected"
+                
+                for (x, y, w, h) in faces:
+                    # Draw on transparent overlay
+                    cv2.rectangle(overlay, (x, y), (x + w, y + h), (255, 0, 0, 255), 2)
+                    face_roi = frame[y:y + h, x:x + w]
+                    
+                    try:
+                        analysis = DeepFace.analyze(face_roi, actions=["emotion"], enforce_detection=False)
+                        if isinstance(analysis, list):
+                            analysis = analysis[0]
+                        emotion = analysis["dominant_emotion"]
+                        
+                        if len(emotion_history) == 0 or emotion_history[-1] != emotion:
+                            emotion_history.append(emotion)
+                    except Exception as e:
+                        print("DeepFace error:", str(e))
+                        emotion = "Error detecting emotion"
+                
+                # Display metrics on overlay
+                fps = 1 / (time.time() - start_time + 1e-5)
+                cv2.putText(overlay, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.font_colour, 2)
+                cv2.putText(overlay, f"Emotion: {emotion}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.font_colour, 2)
+                
+                cv2.imshow("EmotionLens Overlay", overlay)
+                
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+        finally:
+            cv2.destroyAllWindows()
+    
+    def calibrate_camera(self):
+        # Adjust camera brightness and contrast settings
+        if self.cap is None or not self.cap.isOpened():
+            self.cap = cv2.VideoCapture(0)
+            if not self.cap.isOpened():
+                print("Error: Could not open webcam.")
+                return
+        
+        cv2.namedWindow("Calibration")
+        cv2.createTrackbar("Brightness", "Calibration", self.brightness, 100, lambda x: None)
+        cv2.createTrackbar("Contrast", "Calibration", self.contrast, 100, lambda x: None)
+        
+        while True:
+            ret, frame = self.cap.read()
+            if not ret:
+                print("Error: Failed to capture image")
+                break
+            
+            frame = cv2.flip(frame, 1)
+            brightness = cv2.getTrackbarPos("Brightness", "Calibration")
+            contrast = cv2.getTrackbarPos("Contrast", "Calibration")
+            
+            # Apply adjustments
+            alpha = contrast / 50 + 0.5
+            beta = brightness - 50
+            adjusted_frame = cv2.convertScaleAbs(frame, alpha=alpha, beta=beta)
+            
+            cv2.imshow("Calibration", adjusted_frame)
+            
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                self.brightness = brightness
+                self.contrast = contrast
+                break
+        
+        cv2.destroyWindow("Calibration")
+        print(f"Camera calibration saved. Brightness: {self.brightness}, Contrast: {self.contrast}")
+        
+        # Save camera settings
+        self.parser['camera'] = {'brightness': str(self.brightness), 'contrast': str(self.contrast)}
+        with open(self.config_path, 'w') as configfile:
+            self.parser.write(configfile)
 
-    # Callback function for trackbars (does nothing but required)
-    def nothing(x):
-        pass
-
-    # Create trackbars for brightness and contrast
-    cv2.createTrackbar("Brightness", "Calibration", brightness, 100, nothing)
-    cv2.createTrackbar("Contrast", "Calibration", contrast, 100, nothing)
-    cv2.setTrackbarPos("Brightness", "Calibration", brightness)
-    cv2.setTrackbarPos("Contrast", "Calibration", contrast)
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print("Error: Failed to capture image")
-            break
-
-        # Mirror the frame
-        frame = cv2.flip(frame, 1)
-
-        # Get values from trackbars
-        brightness = cv2.getTrackbarPos("Brightness", "Calibration")
-        contrast = cv2.getTrackbarPos("Contrast", "Calibration")
-
-        # Apply brightness and contrast adjustments
-        alpha = contrast / 50 + 0.5  # Scale contrast
-        beta = brightness - 50  # Adjust brightness
-        adjusted_frame = cv2.convertScaleAbs(frame, alpha=alpha, beta=beta)
-
-        # Show the adjusted video feed
-        cv2.imshow("Calibration", adjusted_frame)
-
-        # Exit when 'q' is pressed
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    # Close calibration window but keep the camera open
-    cv2.destroyWindow("Calibration")
-    print(f"Camera calibration saved. Brightness: {brightness}, Contrast: {contrast}")
-
-    parser['camera'] = {'brightness': str(brightness), 'contrast': str(contrast)}
-    with open(config_path, 'w') as configfile:
-        parser.write(configfile)
-
-
-
-# Function to quit emotion detection 
-def quit_emotionLens():
-    global cap  # Access the global cap variable
-    if cap is not None:  # If the camera is running, release it
-        cap.release()
-    cv2.destroyAllWindows()  # Close OpenCV windows
-    root.quit()  # Exit the Tkinter mainloop
-    root.destroy() # Complete termination
-
-
-
-# Function to recreate the main buttons
-def create_main_buttons():
-    # Clear existing widgets in the window
-    for widget in root.winfo_children():
-        widget.destroy()
-
-    title_label = tk.Label(root, text="EmotionLens - Emotion Detection System")
-    title_label.pack(pady=20)
-
-    start_button = tk.Button(root, text="Start Emotion Detection", command=start_emotionDetection)
-    start_button.pack(pady=10)
-
-    start_button = tk.Button(root, text="Detect Emotion From Screen", command=start_screen_emotionDetection)
-    start_button.pack(pady=10)
-
-    settings_button = tk.Button(root, text="Settings", command=settings_emotionLens)
-    settings_button.pack(pady=10)
-
-    helpGuide_button = tk.Button(root, text="Help Guide", command=helpGuide_emotionLens)
-    helpGuide_button.pack(pady=10)
-
-    quit_button = tk.Button(root, text="Quit", command=quit_emotionLens)
-    quit_button.pack(pady=10)
-
-# Initialise the main GUI with buttons
-create_main_buttons()
-
-# Start Tkinter window
-root.mainloop()
+# Run application
+if __name__ == "__main__":
+    app = EmotionLensApp()
+    app.mainloop()
