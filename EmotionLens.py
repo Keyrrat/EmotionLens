@@ -4,6 +4,7 @@ import numpy as np # For mathematical operations
 import time # For FPS calculation
 from deepface import DeepFace  # For emotion detection (DeepFace is the dataset)
 import customtkinter as ctk # For the modern GUI
+from CTkMessagebox import CTkMessagebox
 import threading # For running detection in separate threads
 import mss # Multi-Screen Shot for screen capture
 # win32 packages for screen processing
@@ -13,6 +14,8 @@ import pygetwindow as gw
 import win32api # To get screen resolution automatically
 from configparser import ConfigParser # For saving/loading settings
 import os
+import PIL
+from PIL import Image
 
 '''
 ------------------------------------------------------------
@@ -128,7 +131,7 @@ class EmotionLensApp(ctk.CTk):
             command=self.update_mode_selection,
             selected_color=("#3B8ED0", "#1F6AA5"),  # Blue selection
             unselected_color=("gray75", "gray30"),    # Gray unselected
-            selected_hover_color=("#36719F", "#1A5D8A"),
+            selected_hover_color=("#36719F", "#1A5D8A"),  # Gray unselected
             font=ctk.CTkFont(weight="bold")
         )
         # Set current selection from config
@@ -203,24 +206,38 @@ class EmotionLensApp(ctk.CTk):
         save_btn = ctk.CTkButton(settings_frame, text="Save Settings", command=self.save_settings)
         save_btn.pack(pady=10)
         
-        reset_btn = ctk.CTkButton(settings_frame, text="Reset to Defaults", command=self.reset_settings, fg_color="transparent", border_width=1)
+        reset_btn = ctk.CTkButton(settings_frame, text="Reset to Default", command=self.reset_settings, fg_color="transparent", border_width=1)
         reset_btn.pack(pady=10)
 
     def create_help_tab(self):
         tab = self.tabview.tab("Help")
         
-        # Help text with usage instructions
-        help_text = """
-        Welcome to EmotionLens Help Guide!
-        This application helps you detect emotions in real-time using your webcam.
-        - Start Emotion Detection: Begin detecting emotions in real time.
-        - Settings: Customise bounding box colour, font size, and font colour.
-        - Calibrate Camera: Calibrate your camera for better accuracy.
-        - Quit: Exit the application.
-        Press 'q' during emotion detection to stop the webcam.
-        """
-        help_label = ctk.CTkLabel(tab, text=help_text, justify="left")
-        help_label.pack(padx=20, pady=20, anchor="w")
+        # Help title
+        help_title = ctk.CTkLabel(tab, text="Welcome to EmotionLens Help Guide!",
+                                font=ctk.CTkFont(size=22, weight="bold"))
+        help_title.pack(pady=(30, 10), anchor="center")
+        
+        # Help text (no manual spaces needed)
+        help_text = (
+            "This application helps you detect emotions in real-time using your webcam.\n\n"
+            "- Start Emotion Detection: Begin detecting emotions in real time.\n"
+            "- Settings: Customize bounding box color, font size, and font color.\n"
+            "- Calibrate Camera: Calibrate your camera for better accuracy.\n"
+            "- Quit: Exit the application.\n\n"
+            "Press 'q' during emotion detection to stop the webcam.\n"
+            "ADD\n"
+            "MORE\n"
+            "HELP\n"
+            "INFO\n"
+        )
+        
+        help_label = ctk.CTkLabel(tab,
+                                text=help_text,
+                                justify="center",
+                                font=ctk.CTkFont(size=16),
+                                wraplength=700)
+        help_label.pack(padx=20, pady=10, anchor="center")
+
     
     def get_colour_name(self, colour):
         # Convert BGR tuple to colour name
@@ -256,8 +273,10 @@ class EmotionLensApp(ctk.CTk):
                 self.parser.write(configfile)
             
             print("Settings saved successfully")
+            CTkMessagebox(title="Success", message="Settings saved successfully!", icon="check")
         except Exception as e:
             print(f"Error saving settings: {e}")
+            CTkMessagebox(title="Error", message="Error saving settings!", icon="cancel")
     
     def reset_settings(self):
         # Reset all settings to default values
@@ -274,6 +293,9 @@ class EmotionLensApp(ctk.CTk):
         
         # Save defaults to config file
         self.save_settings()
+
+        print("Settings reset successfully")
+        CTkMessagebox(title="Reset", message="Settings reset to default.", icon="warning")
     
     def start_detection(self):
         # Start emotion detection in a separate thread based on selected mode
@@ -289,6 +311,15 @@ class EmotionLensApp(ctk.CTk):
         
         if not self.cap.isOpened():
             print("Error: Could not open webcam.")
+            msg = CTkMessagebox(
+            title="Error", 
+            message="Could not open webcam.", 
+            icon="cancel", 
+            option_1="Retry", 
+            option_2="Cancel"
+            )
+            if msg.get() == "Retry":
+                self.start_emotionDetection()
             return
         
         # Apply saved camera settings
@@ -416,7 +447,17 @@ class EmotionLensApp(ctk.CTk):
             self.cap = cv2.VideoCapture(0)
             if not self.cap.isOpened():
                 print("Error: Could not open webcam.")
+                msg = CTkMessagebox(
+                title="Error", 
+                message="Could not open webcam for calibration.", 
+                icon="cancel", 
+                option_1="Retry", 
+                option_2="Cancel"
+                )
+                if msg.get() == "Retry":
+                    self.calibrate_camera()
                 return
+
         
         cv2.namedWindow("Calibration")
         cv2.createTrackbar("Brightness", "Calibration", self.brightness, 100, lambda x: None)
