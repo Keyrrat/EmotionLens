@@ -14,7 +14,6 @@ import pygetwindow as gw
 import win32api # To get screen resolution automatically
 from configparser import ConfigParser # For saving/loading settings
 import os
-import PIL
 from PIL import Image
 
 '''
@@ -36,21 +35,34 @@ class EmotionLensApp(ctk.CTk):
         self.title('EmotionLens')  # Window title
         self.geometry("1000x600")  # Initial window size
         self.minsize(800, 500)  # Minimum window size
-        
+
+        try:
+            icon_path = os.path.join(os.path.dirname(__file__), "icon.ico")
+            if os.path.exists(icon_path):
+                self.iconbitmap(icon_path)
+            else:
+                print("Error: icon.ico not found. Loading with no icon.")
+        except Exception as e:
+            print(f"Failed to load window icon: {e}")
+
         # Initialize variables with default values
         self.cap = None  # Video capture object
         self.bounding_box_colour = (255, 255, 255)  # BGR format for OpenCV
         self.font_colour = (255, 255, 255)  # Text colour for display
         self.brightness = 50  # Default camera brightness (0-100)
         self.contrast = 50  # Default camera contrast (0-100)
-        self.mode_var = ctk.StringVar(value="camera")  # Track detection mode
-        
-        # Configuration file handling
+    
         self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setting_save.txt")
         self.parser = ConfigParser()
-        self.load_config()  # Load or create config file
-        
-        # Build the user interface
+        self.load_config()
+
+        saved_mode = self.parser.get('detection', 'mode', fallback='camera')
+        self.mode_var = ctk.StringVar(value=saved_mode)
+        if saved_mode == "camera":
+            self.mode_display_var = ctk.StringVar(value="Camera")
+        else:
+            self.mode_display_var = ctk.StringVar(value="Screen")
+
         self.create_main_ui()
         
     def load_config(self):
@@ -114,30 +126,28 @@ class EmotionLensApp(ctk.CTk):
     def create_main_tab(self):
         # Create content for the main detection tab
         tab = self.tabview.tab("Main")
-        
+
         # Application title
         title = ctk.CTkLabel(tab, text="EmotionLens - Emotion Detection System", font=ctk.CTkFont(size=20, weight="bold"))
         title.pack(pady=20)
-        
+
         # Detection mode selection (camera or screen)
         mode_frame = ctk.CTkFrame(tab, fg_color="transparent")
         mode_frame.pack(pady=10)
-        
-        # Segmented button with persistent highlighting
-        mode_segment = ctk.CTkSegmentedButton(
+
+        self.mode_segment = ctk.CTkSegmentedButton(
             mode_frame,
             values=["Camera", "Screen"],
-            variable=self.mode_var,
+            variable=self.mode_display_var,
             command=self.update_mode_selection,
-            selected_color=("#3B8ED0", "#1F6AA5"),  # Blue selection
-            unselected_color=("gray75", "gray30"),    # Gray unselected
-            selected_hover_color=("#36719F", "#1A5D8A"),  # Gray unselected
+            selected_color=("#3B8ED0", "#1F6AA5"),
+            unselected_color=("gray75", "gray30"),
+            selected_hover_color=("#36719F", "#1A5D8A"),
             font=ctk.CTkFont(weight="bold")
         )
-        # Set current selection from config
-        mode_segment.set("Camera" if self.mode_var.get() == "camera" else "Screen")
-        mode_segment.pack(pady=5)
-        
+        self.mode_segment.set(self.mode_display_var.get())
+        self.mode_segment.pack(pady=5)
+
         # Main detection start button
         start_btn = ctk.CTkButton(
             tab,
@@ -145,20 +155,24 @@ class EmotionLensApp(ctk.CTk):
             command=self.start_detection,
             height=40,
             font=ctk.CTkFont(size=16, weight="bold"),
-            fg_color="#2FA572",  # Green color for "go"
+            fg_color="#2FA572",
             hover_color="#3DBA7C"
         )
         start_btn.pack(pady=20, ipadx=20, ipady=10)
 
     def update_mode_selection(self, selected_display):
-        """Convert display text to internal values and save to config"""
-        internal_value = "camera" if selected_display == "Camera" else "screen"
-        self.mode_var.set(internal_value)
-        
-        # Save to config file
-        self.parser['detection'] = {'mode': internal_value}
+        # Sync internal logic variable based on display
+        if selected_display == "Camera":
+            self.mode_var.set("camera")
+        else:
+            self.mode_var.set("screen")
+
+        # Save new selection to config
+        self.parser['detection'] = {'mode': self.mode_var.get()}
         with open(self.config_path, 'w') as configfile:
             self.parser.write(configfile)
+
+
 
     def create_settings_tab(self):
         # Create content for the settings configuration tab
