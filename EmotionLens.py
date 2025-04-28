@@ -60,9 +60,9 @@ class EmotionLensApp(ctk.CTk):
         self.mode_var = ctk.StringVar(value=saved_mode)
         if saved_mode == "camera":
             self.mode_display_var = ctk.StringVar(value="Camera")
-        if saved_mode == "screen":
+        elif saved_mode == "screen":
             self.mode_display_var = ctk.StringVar(value="Screen")
-        if saved_mode == "image":
+        elif saved_mode == "image":
             self.mode_display_var = ctk.StringVar(value="Image")
         else:
             self.mode_display_var = ctk.StringVar(value="Video")
@@ -168,9 +168,9 @@ class EmotionLensApp(ctk.CTk):
         # Sync internal logic variable based on display
         if selected_display == "Camera":
             self.mode_var.set("camera")
-        if selected_display == "Screen":
+        elif selected_display == "Screen":
             self.mode_var.set("screen")
-        if selected_display == "Image":
+        elif selected_display == "Image":
             self.mode_var.set("image")
         else:
             self.mode_var.set("video")
@@ -253,11 +253,7 @@ class EmotionLensApp(ctk.CTk):
             "INFO\n"
         )
         
-        help_label = ctk.CTkLabel(tab,
-                                text=help_text,
-                                justify="center",
-                                font=ctk.CTkFont(size=16),
-                                wraplength=700)
+        help_label = ctk.CTkLabel(tab, text=help_text, justify="center", font=ctk.CTkFont(size=16), wraplength=700)
         help_label.pack(padx=20, pady=10, anchor="center")
 
     

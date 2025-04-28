@@ -1,16 +1,19 @@
 [style]
-style = System
+style = Dark
 
 [bounding_box_colour]
-bounding_box_colour = White
+bounding_box_colour = Red
 
 [font_colour]
-font_colour = White
+font_colour = Yellow
 
 [camera]
 brightness = 50
 contrast = 50
 
 [detection]
-mode = video
+mode = screen
+
+[monitor]
+index = 0
 
