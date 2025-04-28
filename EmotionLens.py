@@ -5,6 +5,7 @@ import time # For FPS calculation
 from deepface import DeepFace  # For emotion detection (DeepFace is the dataset)
 import customtkinter as ctk # For the modern GUI
 from CTkMessagebox import CTkMessagebox
+from tkinter import filedialog # For files
 import threading # For running detection in separate threads
 import mss # Multi-Screen Shot for screen capture
 # win32 packages for screen processing
@@ -14,7 +15,6 @@ import pygetwindow as gw
 import win32api # To get screen resolution automatically
 from configparser import ConfigParser # For saving/loading settings
 import os
-from PIL import Image
 
 '''
 ------------------------------------------------------------
@@ -60,8 +60,12 @@ class EmotionLensApp(ctk.CTk):
         self.mode_var = ctk.StringVar(value=saved_mode)
         if saved_mode == "camera":
             self.mode_display_var = ctk.StringVar(value="Camera")
-        else:
+        if saved_mode == "screen":
             self.mode_display_var = ctk.StringVar(value="Screen")
+        if saved_mode == "image":
+            self.mode_display_var = ctk.StringVar(value="Image")
+        else:
+            self.mode_display_var = ctk.StringVar(value="Video")
 
         self.create_main_ui()
         
@@ -137,7 +141,7 @@ class EmotionLensApp(ctk.CTk):
 
         self.mode_segment = ctk.CTkSegmentedButton(
             mode_frame,
-            values=["Camera", "Screen"],
+            values=["Camera", "Screen", "Image", "Video"],
             variable=self.mode_display_var,
             command=self.update_mode_selection,
             selected_color=("#3B8ED0", "#1F6AA5"),
@@ -164,8 +168,12 @@ class EmotionLensApp(ctk.CTk):
         # Sync internal logic variable based on display
         if selected_display == "Camera":
             self.mode_var.set("camera")
-        else:
+        if selected_display == "Screen":
             self.mode_var.set("screen")
+        if selected_display == "Image":
+            self.mode_var.set("image")
+        else:
+            self.mode_var.set("video")
 
         # Save new selection to config
         self.parser['detection'] = {'mode': self.mode_var.get()}
@@ -316,14 +324,110 @@ class EmotionLensApp(ctk.CTk):
         mode = self.mode_var.get()
         if mode == "camera":
             threading.Thread(target=self.start_emotionDetection, daemon=True).start()
-        else:
+        elif mode == "screen":
             threading.Thread(target=self.start_screen_emotionDetection, daemon=True).start()
+        elif mode == "image":
+            threading.Thread(target=self.image_emotionDetection, daemon=True).start()
+        elif mode == "video":
+            threading.Thread(target=self.video_emotionDetection, daemon=True).start()
+        else:
+            print("Error: Unknown mode selected")
 
-    def image_emotionDetection():
-        return
+    def image_emotionDetection(self):
+        file_path = filedialog.askopenfilename(
+        title="Select Image",
+        filetypes=[("Image Files", "*.jpg *.jpeg *.png *.bmp *.tiff")])
+        if not file_path:
+            print("Error: No file selected")
+            return
+        
+        frame = cv2.imread(file_path) # Load the frame
+        if frame is None:
+            print(f"Error: Cannot load image at {file_path}")
+            return
+
+        # Minimum dimensions
+        min_width = 500
+        min_height = 500
+
+        height, width = frame.shape[:2]
+        if width < min_width or height < min_height:
+            scale_w = min_width / width
+            scale_h = min_height / height
+            scale = max(scale_w, scale_h)
+            new_width = int(width * scale)
+            new_height = int(height * scale)
+            frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
+            print(f"Image resized to: {new_width}x{new_height}")
+
+        try:
+            analysis = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False)
+            dominant_emotion = analysis[0]['dominant_emotion'] if isinstance(analysis, list) else analysis['dominant_emotion']
+            print("Dominant emotion:", dominant_emotion)
+
+            cv2.putText(frame, dominant_emotion, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.imshow("Image Emotion Detection", frame)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+        except Exception as e:
+            print(f"DeepFace error: {e}")
     
-    def video_emotionDetection():
-        return
+    def video_emotionDetection(self):
+        video_path = filedialog.askopenfilename(
+            title="Select Video",
+            filetypes=[("Video Files", "*.mp4 *.avi *.mov *.mkv *.flv *.wmv")]
+        )
+        if not video_path:
+            print("Error: No file selected")
+            return
+        
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print(f"Error: Cannot open video {video_path}")
+            return
+
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        frame_count = 0
+        last_emotion = "Detecting..."
+
+        try:
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    print("End of video or failed reading frame.")
+                    break
+
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+                for (x, y, w, h) in faces:
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), self.bounding_box_colour, 2)
+
+                    # Only run DeepFace every 5 frames
+                    if frame_count % 5 == 0:
+                        face_roi = frame[y:y+h, x:x+w]
+                        try:
+                            analysis = DeepFace.analyze(face_roi, actions=["emotion"], enforce_detection=False)
+                            if isinstance(analysis, list):
+                                analysis = analysis[0]
+                            last_emotion = analysis["dominant_emotion"]
+                        except Exception as e:
+                            print("DeepFace error:", str(e))
+                            last_emotion = "Error"
+
+                    text_position = (x, y + h + 30)
+                    cv2.putText(frame, f"{last_emotion}", text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.font_colour, 2)
+
+                cv2.imshow("Video Emotion Detection", frame)
+
+                frame_count += 1
+
+                if cv2.waitKey(30) & 0xFF == ord('q'):  # ~30ms delay (approx 30 FPS)
+                    break
+        finally:
+            cap.release()
+            cv2.destroyAllWindows()
+            
     
 
     def start_emotionDetection(self):
