@@ -319,6 +319,13 @@ class EmotionLensApp(ctk.CTk):
         else:
             threading.Thread(target=self.start_screen_emotionDetection, daemon=True).start()
 
+    def image_emotionDetection():
+        return
+    
+    def video_emotionDetection():
+        return
+    
+
     def start_emotionDetection(self):
         # Perform real-time emotion detection from webcam feed
         self.cap = cv2.VideoCapture(0)  # Open default camera
@@ -360,28 +367,22 @@ class EmotionLensApp(ctk.CTk):
                 emotion = "No face detected"  # Default message
                 
                 for (x, y, w, h) in faces:
-                    # Draw bounding box around detected face
+                    # Draw rectangle
                     cv2.rectangle(frame, (x, y), (x + w, y + h), self.bounding_box_colour, 2)
-                    face_roi = frame[y:y + h, x:x + w]  # Extract face region
+                    face_roi = frame[y:y + h, x:x + w]
                     
                     try:
-                        # Analyze face for emotions using DeepFace
                         analysis = DeepFace.analyze(face_roi, actions=["emotion"], enforce_detection=False)
                         if isinstance(analysis, list):
-                            analysis = analysis[0]  # Take first result if multiple
+                            analysis = analysis[0]
                         emotion = analysis["dominant_emotion"]
-                        
-                        # Track emotion changes
-                        if len(emotion_history) == 0 or emotion_history[-1] != emotion:
-                            emotion_history.append(emotion)
                     except Exception as e:
                         print("DeepFace error:", str(e))
-                        emotion = "Error detecting emotion"
-                
-                # Display performance metrics
-                fps = 1 / (time.time() - start_time + 1e-5)
-                cv2.putText(frame, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.font_colour, 2)
-                cv2.putText(frame, f"Emotion: {emotion}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.font_colour, 2)
+                        emotion = "Error"
+
+                    text_position = (x, y + h + 30)
+                    cv2.putText(frame, f"{emotion}", text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.font_colour, 2)
+
                 
                 # Show the video feed
                 cv2.imshow("Webcam Feed", frame)
@@ -427,7 +428,7 @@ class EmotionLensApp(ctk.CTk):
                 emotion = "No face detected"
                 
                 for (x, y, w, h) in faces:
-                    # Draw on transparent overlay
+                    # Draw box
                     cv2.rectangle(overlay, (x, y), (x + w, y + h), (255, 0, 0, 255), 2)
                     face_roi = frame[y:y + h, x:x + w]
                     
@@ -437,16 +438,15 @@ class EmotionLensApp(ctk.CTk):
                             analysis = analysis[0]
                         emotion = analysis["dominant_emotion"]
                         
-                        if len(emotion_history) == 0 or emotion_history[-1] != emotion:
-                            emotion_history.append(emotion)
+                        # Draw emotion BELOW the bounding box
+                        text_position = (x, y + h + 30)
+                        cv2.putText(overlay, f"{emotion}", text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255, 255), 2)
                     except Exception as e:
                         print("DeepFace error:", str(e))
-                        emotion = "Error detecting emotion"
                 
                 # Display metrics on overlay
                 fps = 1 / (time.time() - start_time + 1e-5)
                 cv2.putText(overlay, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.font_colour, 2)
-                cv2.putText(overlay, f"Emotion: {emotion}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, self.font_colour, 2)
                 
                 cv2.imshow("EmotionLens Overlay", overlay)
                 

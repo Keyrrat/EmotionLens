@@ -2,7 +2,7 @@
 style = System
 
 [bounding_box_colour]
-bounding_box_colour = Red
+bounding_box_colour = White
 
 [font_colour]
 font_colour = White
