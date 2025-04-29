@@ -85,6 +85,7 @@ class EmotionLensApp(ctk.CTk):
                 self.parser['style'] = {'style': 'System'}
                 self.parser['bounding_box_colour'] = {'bounding_box_colour': 'White'}
                 self.parser['font_colour'] = {'font_colour': 'White'}
+                self.parser['text_size'] = {'text_size': 'Medium'}
                 self.parser['camera'] = {'brightness': '50', 'contrast': '50', 'index': '0'}
                 self.parser['monitor'] = {'index': '0'}
                 self.parser['detection'] = {'mode': 'camera'}
@@ -98,6 +99,7 @@ class EmotionLensApp(ctk.CTk):
                 
                 self.bounding_box_colour = self.get_colour_from_name(self.parser.get('bounding_box_colour', 'bounding_box_colour', fallback='White'))
                 self.font_colour = self.get_colour_from_name(self.parser.get('font_colour', 'font_colour', fallback='White'))
+                self.text_size = self.get_text_size(self.parser.get('text_size', 'text_size', fallback='Medium'))
                 self.brightness = int(self.parser.get('camera', 'brightness', fallback='50'))
                 self.contrast = int(self.parser.get('camera', 'contrast', fallback='50'))
                 self.selected_camera = int(self.parser.get('camera', 'index', fallback='0'))
@@ -259,6 +261,13 @@ class EmotionLensApp(ctk.CTk):
         self.font_colour_var = ctk.StringVar(value=self.get_colour_name(self.font_colour))
         font_colour_menu = ctk.CTkOptionMenu(settings_frame, values=["White", "Black", "Red", "Green", "Blue", "Yellow"], variable=self.font_colour_var)
         font_colour_menu.pack(fill="x", pady=(0, 10))
+
+        # Text size selection
+        text_size_label = ctk.CTkLabel(settings_frame, text="Text Size:")
+        text_size_label.pack(anchor="w", pady=(5, 0))
+        self.text_size_var = ctk.StringVar(value="Medium")  # Default to Medium
+        text_size_menu = ctk.CTkOptionMenu(settings_frame, values=["Small", "Medium", "Large", "Extra Large"], variable=self.text_size_var)
+        text_size_menu.pack(fill="x", pady=(0, 10))
         
         # Camera calibration button
         calibrate_btn = ctk.CTkButton(settings_frame, text="Calibrate Camera", command=self.calibrate_camera)
@@ -303,6 +312,15 @@ class EmotionLensApp(ctk.CTk):
         }
         return colour_mapping.get(tuple(colour), "White")
     
+    def get_text_size(self, size_name):
+        size_mapping = {
+            "Small": 0.5,
+            "Medium": 0.7,
+            "Large": 1.0,
+            "Extra Large": 1.2
+        }
+        return size_mapping.get(size_name, 0.7)  # Default to Medium size
+    
     def change_theme(self, new_theme):
         # Change the application theme dynamically
         ctk.set_appearance_mode(new_theme)
@@ -313,11 +331,13 @@ class EmotionLensApp(ctk.CTk):
             # Update runtime settings from UI selections
             self.bounding_box_colour = self.get_colour_from_name(self.bb_colour_var.get())
             self.font_colour = self.get_colour_from_name(self.font_colour_var.get())
+            self.text_size = self.get_text_size(self.text_size_var.get())
             
             # Save all settings to config file
             self.parser['style'] = {'style': self.theme_var.get()}
             self.parser['bounding_box_colour'] = {'bounding_box_colour': self.bb_colour_var.get()}
             self.parser['font_colour'] = {'font_colour': self.font_colour_var.get()}
+            self.parser['text_size'] = {'text_size': self.text_size_var.get()}
             self.parser['camera'] = {'brightness': str(self.brightness), 'contrast': str(self.contrast), 'index': str(self.selected_camera)}
             self.parser['monitor'] = {'index': str(self.selected_monitor)}
             self.parser['detection'] = {'mode': self.mode_var.get()}
@@ -336,6 +356,7 @@ class EmotionLensApp(ctk.CTk):
         self.theme_var.set("System")
         self.bb_colour_var.set("White")
         self.font_colour_var.set("White")
+        self.text_size_var.set("Medium")
         self.brightness = 50
         self.contrast = 50
         self.mode_var.set("camera")
@@ -343,6 +364,7 @@ class EmotionLensApp(ctk.CTk):
         # Update runtime settings
         self.bounding_box_colour = self.get_colour_from_name("White")
         self.font_colour = self.get_colour_from_name("White")
+        self.text_size = self.get_text_size("Medium")
         
         # Save defaults to config file
         self.save_settings()
@@ -423,7 +445,7 @@ class EmotionLensApp(ctk.CTk):
             dominant_emotion = analysis[0]['dominant_emotion'] if isinstance(analysis, list) else analysis['dominant_emotion']
             print("Dominant emotion:", dominant_emotion)
 
-            cv2.putText(frame, dominant_emotion, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            cv2.putText(frame, dominant_emotion, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, self.text_size, (0, 255, 0), 2)
             
             # Show image
             cv2.imshow("Image Emotion Detection", frame)
@@ -491,7 +513,7 @@ class EmotionLensApp(ctk.CTk):
                             last_emotion = "Error"
 
                     text_position = (x, y + h + 30)
-                    cv2.putText(frame, f"{last_emotion}", text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.font_colour, 2)
+                    cv2.putText(frame, f"{last_emotion}", text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, self.font_colour, 2)
 
                 cv2.imshow("Video Emotion Detection", frame)
 
@@ -575,7 +597,7 @@ class EmotionLensApp(ctk.CTk):
                         emotion = "Error"
 
                     text_position = (x, y + h + 30)
-                    cv2.putText(frame, f"{emotion}", text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.7, self.font_colour, 2)
+                    cv2.putText(frame, f"{emotion}", text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, self.font_colour, 2)
 
                 
                 # Show the video feed
@@ -647,13 +669,13 @@ class EmotionLensApp(ctk.CTk):
                         
                         # Draw emotion BELOW the bounding box
                         text_position = (x, y + h + 30)
-                        cv2.putText(overlay, f"{emotion}", text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (*self.font_colour, 255), 2)
+                        cv2.putText(overlay, f"{emotion}", text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, (*self.font_colour, 255), 2)
                     except Exception as e:
                         print("DeepFace error:", str(e))
                 
                 # Display metrics on overlay
                 fps = 1 / (time.time() - start_time + 1e-5)
-                cv2.putText(overlay, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (*self.font_colour, 255), 2)
+                cv2.putText(overlay, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, self.text_size, (*self.font_colour, 255), 2, cv2.LINE_AA)
                 
                 cv2.imshow("EmotionLens Overlay", overlay)
 

@@ -1,5 +1,5 @@
 [style]
-style = System
+style = Dark
 
 [bounding_box_colour]
 bounding_box_colour = Red
@@ -7,13 +7,16 @@ bounding_box_colour = Red
 [font_colour]
 font_colour = Yellow
 
+[text_size]
+text_size = Large
+
 [camera]
 brightness = 50
 contrast = 50
 index = 0
 
 [detection]
-mode = image
+mode = screen
 
 [monitor]
 index = 0
