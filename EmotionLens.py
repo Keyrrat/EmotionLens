@@ -34,7 +34,7 @@ class EmotionLensApp(ctk.CTk):
         self.minsize(800, 500)  # Minimum window size
 
         try:
-            icon_path = os.path.join(os.path.dirname(__file__), "icon.ico")
+            icon_path = os.path.join(os.path.dirname(__file__), "icon_emotionLens.ico")
             if os.path.exists(icon_path):
                 self.iconbitmap(icon_path)
             else:
@@ -419,8 +419,8 @@ class EmotionLensApp(ctk.CTk):
             print("Error: No file selected")
             self.stop_detection()
             return
-        
-        frame = cv2.imread(file_path)  # Load the frame
+
+        frame = cv2.imread(file_path)
         if frame is None:
             print(f"Error: Cannot load image at {file_path}")
             self.stop_detection()
@@ -441,13 +441,33 @@ class EmotionLensApp(ctk.CTk):
             print(f"Image resized to: {new_width}x{new_height}")
 
         try:
-            analysis = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False)
-            dominant_emotion = analysis[0]['dominant_emotion'] if isinstance(analysis, list) else analysis['dominant_emotion']
-            print("Dominant emotion:", dominant_emotion)
+            # Detect faces
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
-            cv2.putText(frame, dominant_emotion, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, self.text_size, (0, 255, 0), 2)
-            
-            # Show image
+            if len(faces) == 0:
+                # If no face detected, analyse the whole frame
+                analysis = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False)
+                dominant_emotion = analysis[0]['dominant_emotion'] if isinstance(analysis, list) else analysis['dominant_emotion']
+                print("Dominant emotion (whole frame):", dominant_emotion)
+                cv2.putText(frame, dominant_emotion, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, self.text_size, (0, 255, 0), 2, cv2.LINE_AA)
+            else:
+                # If faces detected, analyse each face
+                for (x, y, w, h) in faces:
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), self.bounding_box_colour, 2)
+                    face_roi = frame[y:y+h, x:x+w]
+                    try:
+                        analysis = DeepFace.analyze(face_roi, actions=['emotion'], enforce_detection=False)
+                        dominant_emotion = analysis[0]['dominant_emotion'] if isinstance(analysis, list) else analysis['dominant_emotion']
+                        print("Dominant emotion (face):", dominant_emotion)
+                    except Exception as e:
+                        print(f"DeepFace error on face: {e}")
+                        dominant_emotion = "Error"
+
+                    text_position = (x, y + h + 30)
+                    cv2.putText(frame, dominant_emotion, text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, self.font_colour, 2, cv2.LINE_AA)
+
             cv2.imshow("Image Emotion Detection", frame)
 
             # Exit
