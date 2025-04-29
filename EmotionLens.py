@@ -56,6 +56,10 @@ class EmotionLensApp(ctk.CTk):
         self.mode_var = ctk.StringVar()
         self.mode_display_var = ctk.StringVar()
 
+        self.detection_running = False  # Track if detection is active
+        self.detection_thread = None  # Save the detection thread
+
+
         self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setting_save.txt")
         self.parser = ConfigParser()
         self.load_config()
@@ -189,16 +193,17 @@ class EmotionLensApp(ctk.CTk):
         self.mode_segment.pack(pady=5)
 
         # Main detection start button
-        start_btn = ctk.CTkButton(
+        self.start_stop_btn = ctk.CTkButton(
             tab,
             text="▶ Start Detection",
-            command=self.start_detection,
+            command=self.toggle_detection,
             height=40,
             font=ctk.CTkFont(size=16, weight="bold"),
             fg_color="#2FA572",
             hover_color="#3DBA7C"
         )
-        start_btn.pack(pady=20, ipadx=20, ipady=10)
+        self.start_stop_btn.pack(pady=20, ipadx=20, ipady=10)
+
 
     def update_mode_selection(self, selected_display):
         # Sync internal logic variable based on display
@@ -209,6 +214,13 @@ class EmotionLensApp(ctk.CTk):
         self.parser['detection'] = {'mode': self.mode_var.get()}
         with open(self.config_path, 'w') as configfile:
             self.parser.write(configfile)
+            
+    def toggle_detection(self):
+        if not self.detection_running:
+            self.start_detection() # Start detection
+        else:
+            self.stop_detection() # Stop detection
+
 
     def create_settings_tab(self):
         # Create content for the settings configuration tab
@@ -340,17 +352,41 @@ class EmotionLensApp(ctk.CTk):
     
     def start_detection(self):
         # Start emotion detection in a separate thread based on selected mode
+        self.detection_running = True
+        self.update_start_stop_button()
+        
         mode = self.mode_var.get()
         if mode == "camera":
-            threading.Thread(target=self.start_emotionDetection, daemon=True).start()
+            self.detection_thread = threading.Thread(target=self.start_emotionDetection, daemon=True)
         elif mode == "screen":
-            threading.Thread(target=self.start_screen_emotionDetection, daemon=True).start()
+            self.detection_thread = threading.Thread(target=self.start_screen_emotionDetection, daemon=True)
         elif mode == "image":
-            threading.Thread(target=self.image_emotionDetection, daemon=True).start()
+            self.detection_thread = threading.Thread(target=self.image_emotionDetection, daemon=True)
         elif mode == "video":
-            threading.Thread(target=self.video_emotionDetection, daemon=True).start()
+            self.detection_thread = threading.Thread(target=self.video_emotionDetection, daemon=True)
         else:
             print("Error: Unknown mode selected")
+            return
+        self.detection_thread.start()
+
+    def stop_detection(self):
+        self.detection_running = False
+        self.update_start_stop_button()
+
+    def update_start_stop_button(self):
+        if self.detection_running:
+            self.start_stop_btn.configure(
+                text="■ Stop Detection",
+                fg_color="#D0312D",
+                hover_color="#AD1D1D"
+            )
+        else:
+            self.start_stop_btn.configure(
+                text="▶ Start Detection",
+                fg_color="#2FA572",
+                hover_color="#3DBA7C"
+            )
+
 
     def image_emotionDetection(self):
         file_path = filedialog.askopenfilename(
@@ -359,11 +395,13 @@ class EmotionLensApp(ctk.CTk):
         )
         if not file_path:
             print("Error: No file selected")
+            self.stop_detection()
             return
         
-        frame = cv2.imread(file_path) # Load the frame
+        frame = cv2.imread(file_path)  # Load the frame
         if frame is None:
             print(f"Error: Cannot load image at {file_path}")
+            self.stop_detection()
             return
 
         # Minimum dimensions
@@ -386,11 +424,26 @@ class EmotionLensApp(ctk.CTk):
             print("Dominant emotion:", dominant_emotion)
 
             cv2.putText(frame, dominant_emotion, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            
+            # Show image
             cv2.imshow("Image Emotion Detection", frame)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+
+            # Exit
+            while True:
+                if cv2.getWindowProperty("Image Emotion Detection", cv2.WND_PROP_VISIBLE) < 1:
+                    self.stop_detection()
+                    break
+                if not self.detection_running:
+                    break
+                if cv2.waitKey(100) & 0xFF == 27:
+                    break
+
         except Exception as e:
             print(f"DeepFace error: {e}")
+
+        finally:
+            cv2.destroyAllWindows()
+            self.stop_detection()
     
     def video_emotionDetection(self):
         video_path = filedialog.askopenfilename(
@@ -399,11 +452,13 @@ class EmotionLensApp(ctk.CTk):
         )
         if not video_path:
             print("Error: No file selected")
+            self.stop_detection()
             return
         
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             print(f"Error: Cannot open video {video_path}")
+            self.stop_detection()
             return
 
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
@@ -411,7 +466,7 @@ class EmotionLensApp(ctk.CTk):
         last_emotion = "Detecting..."
 
         try:
-            while cap.isOpened():
+            while cap.isOpened() and self.detection_running:
                 ret, frame = cap.read()
                 if not ret:
                     print("End of video or failed reading frame.")
@@ -442,11 +497,20 @@ class EmotionLensApp(ctk.CTk):
 
                 frame_count += 1
 
+                # Exit
+                if cv2.getWindowProperty("Video Emotion Detection", cv2.WND_PROP_VISIBLE) < 1:
+                    self.stop_detection()
+                    break
                 if cv2.waitKey(30) & 0xFF == 27:  # ~30ms delay (approx 30 FPS)
+                    self.stop_detection()
                     break
         finally:
-            cap.release()
+            # Cleanup resources
+            if self.cap is not None and self.cap.isOpened():
+                self.cap.release()
             cv2.destroyAllWindows()
+
+        
 
     def start_emotionDetection(self):
         # Perform real-time emotion detection from webcam feed
@@ -472,9 +536,17 @@ class EmotionLensApp(ctk.CTk):
         # Load face detection classifier
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
         emotion_history = []  # Track emotion changes over time
+
+        shown_once = False
         
         try:
-            while True:
+            while self.detection_running:
+
+                # Close webcam window
+                if shown_once and cv2.getWindowProperty("Webcam Feed", cv2.WND_PROP_VISIBLE) < 1:
+                    self.stop_detection()
+                    break
+                
                 start_time = time.time()  # For FPS calculation
                 ret, frame = self.cap.read()
                 if not ret:
@@ -508,14 +580,18 @@ class EmotionLensApp(ctk.CTk):
                 
                 # Show the video feed
                 cv2.imshow("Webcam Feed", frame)
-                
-                # Exit on 'q' key press
+                shown_once = True
+
+                # Exit with esc
                 if cv2.waitKey(1) & 0xFF == 27:
+                    self.stop_detection()
                     break
         finally:
             # Cleanup resources
-            self.cap.release()
+            if self.cap is not None and self.cap.isOpened():
+                self.cap.release()
             cv2.destroyAllWindows()
+
 
     def start_screen_emotionDetection(self):
         # Detect emotion from screen using transparent overlay
@@ -543,7 +619,13 @@ class EmotionLensApp(ctk.CTk):
         win32gui.SetLayeredWindowAttributes(hwnd, 0, 0, win32con.LWA_COLORKEY)
         
         try:
-            while True:
+            while self.detection_running:
+
+                # Close overlay window
+                if cv2.getWindowProperty("EmotionLens Overlay", cv2.WND_PROP_VISIBLE) < 1:
+                    self.stop_detection()
+                    break
+                
                 start_time = time.time()
                 screen = np.array(sct.grab(monitor))  # Capture screen
                 frame = cv2.cvtColor(screen, cv2.COLOR_BGRA2BGR)
@@ -574,10 +656,15 @@ class EmotionLensApp(ctk.CTk):
                 cv2.putText(overlay, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (*self.font_colour, 255), 2)
                 
                 cv2.imshow("EmotionLens Overlay", overlay)
-                
+
+                # Exit with esc
                 if cv2.waitKey(1) & 0xFF == 27:
+                    self.stop_detection()
                     break
         finally:
+            # Cleanup resources
+            if self.cap is not None and self.cap.isOpened():
+                self.cap.release()
             cv2.destroyAllWindows()
     
     def calibrate_camera(self):

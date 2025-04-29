@@ -13,7 +13,7 @@ contrast = 50
 index = 0
 
 [detection]
-mode = camera
+mode = image
 
 [monitor]
 index = 0
