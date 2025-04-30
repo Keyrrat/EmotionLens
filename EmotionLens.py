@@ -250,7 +250,7 @@ class EmotionLensApp(ctk.CTk):
         theme_menu.pack(fill="x", pady=(0, 10))
         
         # Detection display settings section
-        detection_label = ctk.CTkLabel(settings_frame, text="Detection Settings", font=ctk.CTkFont(weight="bold"))
+        detection_label = ctk.CTkLabel(settings_frame, text="⚙️ Detection Settings", font=ctk.CTkFont(weight="bold"))
         detection_label.pack(pady=(10, 10), anchor="w")
         
         # Bounding box colour selection
@@ -275,11 +275,11 @@ class EmotionLensApp(ctk.CTk):
         text_size_menu.pack(fill="x", pady=(0, 10))
         
         # Camera calibration button
-        calibrate_btn = ctk.CTkButton(settings_frame, text="Calibrate Camera", command=self.calibrate_camera)
+        calibrate_btn = ctk.CTkButton(settings_frame, text="📽 Calibrate Camera", command=self.calibrate_camera)
         calibrate_btn.pack(pady=10)
         
         # Settings action buttons
-        save_btn = ctk.CTkButton(settings_frame, text="Save Settings", command=self.save_settings)
+        save_btn = ctk.CTkButton(settings_frame, text="💾 Save Settings", command=self.save_settings)
         save_btn.pack(pady=10)
         
         reset_btn = ctk.CTkButton(settings_frame, text="Reset to Default", command=self.reset_settings, fg_color="transparent", border_width=1)
