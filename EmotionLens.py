@@ -52,18 +52,20 @@ class EmotionLensApp(ctk.CTk):
         self.selected_monitor = 0
         self.available_cameras = []
         self.selected_camera = 0
+        
+        # Emotion history tracking
+        self.emotion_history = []
+        self.last_emotion = None
+        self.last_update_time = 0
+        self.history_panel_height = 300
+        self.animation_step = 0
+        self.animation_running = False
+        self.history_panel_visible = False
 
         self.mode_var = ctk.StringVar()
         self.mode_display_var = ctk.StringVar()
-
         self.detection_running = False  # Track if detection is active
         self.detection_thread = None  # Save the detection thread
-
-        # Tracking for emotion history window
-        self.emotion_history = []     # Stores last 20 emotions
-        self.last_emotion = None      # Track last emotion for deduplication
-        self.history_window = None    # History popup window
-        self.scroll_frame = None      # Scrollable content area
 
         self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setting_save.txt")
         self.parser = ConfigParser()
@@ -71,14 +73,9 @@ class EmotionLensApp(ctk.CTk):
 
         saved_mode = self.parser.get('detection', 'mode', fallback='camera')
         self.mode_var.set(saved_mode)
-        if saved_mode == "camera":
-            self.mode_display_var.set("Camera")
-        elif saved_mode == "screen":
-            self.mode_display_var.set("Screen")
-        elif saved_mode == "image":
-            self.mode_display_var.set("Image")
-        else:
-            self.mode_display_var.set("Video")
+        self.mode_display_var.set("Camera" if saved_mode == "camera" else 
+                                 "Screen" if saved_mode == "screen" else
+                                 "Image" if saved_mode == "image" else "Video")
 
         self.create_main_ui()
 
@@ -196,7 +193,6 @@ class EmotionLensApp(ctk.CTk):
             selected_hover_color=("#36719F", "#1A5D8A"),
             font=ctk.CTkFont(weight="bold")
         )
-        self.mode_segment.set(self.mode_display_var.get())
         self.mode_segment.pack(pady=5)
 
         # Main detection start button
@@ -211,6 +207,172 @@ class EmotionLensApp(ctk.CTk):
         )
         self.start_stop_btn.pack(pady=20, ipadx=20, ipady=10)
 
+        self.history_btn = ctk.CTkButton(
+            tab,
+            text="🕘 View Emotion History",
+            command=self.show_history_panel,
+            fg_color="#3B8ED0",
+            hover_color="#36719F"
+        )
+        self.history_btn.pack(side="bottom", pady=10)
+
+        self.create_history_panel()
+
+    def create_history_panel(self):
+        self.history_container = ctk.CTkFrame(
+            self.tabview.tab("Main"),
+            fg_color="transparent",
+            width=self.winfo_width(),
+            height=0
+        )
+        self.history_container.pack_propagate(False)
+        self.history_container.place(relx=0, rely=1.0, anchor="sw", relwidth=1.0)
+
+        self.history_panel = ctk.CTkFrame(
+            self.history_container,
+            fg_color=("#f0f0f0", "#2b2b2b"),
+            height=self.history_panel_height
+        )
+        self.history_panel.pack(fill="both", expand=True)
+
+        title_frame = ctk.CTkFrame(self.history_panel, fg_color="transparent")
+        title_frame.pack(fill="x", padx=10, pady=10)
+        
+        ctk.CTkLabel(title_frame, text="Emotion History", 
+                    font=ctk.CTkFont(size=16, weight="bold")).pack(side="left")
+        
+        close_btn = ctk.CTkButton(
+            title_frame,
+            text="×",
+            width=30,
+            height=30,
+            command=self.hide_history_panel,
+            fg_color="transparent",
+            hover_color=("#e0e0e0", "#333333"),
+            font=ctk.CTkFont(size=16, weight="bold")
+        )
+        close_btn.pack(side="right")
+        
+        self.history_scroll = ctk.CTkScrollableFrame(
+            self.history_panel,
+            fg_color="transparent"
+        )
+        self.history_scroll.pack(fill="both", expand=True, padx=10, pady=(0,10))
+
+    def update_emotion_history(self, emotion):
+        if not self.detection_running:
+            return
+            
+        current_time = time.time()
+        if emotion != self.last_emotion and (current_time - self.last_update_time) >= 2:
+            self.last_emotion = emotion
+            self.last_update_time = current_time
+            timestamp = time.strftime("%H:%M:%S")
+            self.emotion_history.append(f"{timestamp}  =  {emotion}")
+            
+            if len(self.emotion_history) > 20:
+                self.emotion_history = self.emotion_history[-20:]
+            
+            if hasattr(self, 'history_panel_visible') and self.history_panel_visible:
+                self.update_history_content()
+
+    def update_history_content(self):
+        if hasattr(self, 'history_scroll'):
+            for widget in self.history_scroll.winfo_children():
+                widget.destroy()
+            
+            if not self.emotion_history:
+                ctk.CTkLabel(
+                    self.history_scroll,
+                    text="No emotion history available\nStart detection to record emotions",
+                    justify="center"
+                ).pack(pady=20)
+            else:
+                for item in reversed(self.emotion_history):
+                    entry_frame = ctk.CTkFrame(self.history_scroll, fg_color="transparent")
+                    entry_frame.pack(fill="x", pady=2)
+                    
+                    timestamp, emotion = item.split("  =  ")
+                    
+                    ctk.CTkLabel(
+                        entry_frame,
+                        text=timestamp,
+                        width=100,
+                        anchor="w",
+                        font=ctk.CTkFont(weight="bold")
+                    ).pack(side="left", padx=(0,10))
+                    
+                    ctk.CTkLabel(
+                        entry_frame,
+                        text=emotion,
+                        anchor="w"
+                    ).pack(side="left", fill="x", expand=True)
+
+    def start_detection(self):
+        if not self.detection_running:
+            self.emotion_history = []
+            self.last_emotion = None
+            self.last_update_time = 0
+            
+        self.detection_running = True
+        self.update_start_stop_button()
+        
+        mode = self.mode_var.get()
+        if mode == "camera":
+            self.detection_thread = threading.Thread(target=self.start_emotionDetection, daemon=True)
+        elif mode == "screen":
+            self.detection_thread = threading.Thread(target=self.start_screen_emotionDetection, daemon=True)
+        elif mode == "image":
+            self.detection_thread = threading.Thread(target=self.image_emotionDetection, daemon=True)
+        elif mode == "video":
+            self.detection_thread = threading.Thread(target=self.video_emotionDetection, daemon=True)
+        
+        self.detection_thread.start()
+
+    def stop_detection(self):
+        self.detection_running = False
+        self.update_start_stop_button()
+        if hasattr(self, 'history_panel_visible') and self.history_panel_visible:
+            self.update_history_content()
+
+    def show_history_panel(self):
+        if not hasattr(self, 'history_panel'):
+            self.create_history_panel()
+        
+        if not self.history_panel_visible:
+            self.history_panel_visible = True
+            self.animate_panel(show=True)
+            self.update_history_content()
+
+    def hide_history_panel(self):
+        if hasattr(self, 'history_panel') and self.history_panel_visible:
+            self.history_panel_visible = False
+            self.animate_panel(show=False)
+
+    def animate_panel(self, show=True):
+        if self.animation_running:
+            return
+            
+        self.animation_running = True
+        
+        def update():
+            if show:
+                self.animation_step += 15
+                if self.animation_step >= self.history_panel_height:
+                    self.animation_step = self.history_panel_height
+                    self.animation_running = False
+                    return
+            else:
+                self.animation_step -= 15
+                if self.animation_step <= 0:
+                    self.animation_step = 0
+                    self.animation_running = False
+                    return
+                    
+            self.history_container.configure(height=self.animation_step)
+            self.after(10, update)
+        
+        update()
 
     def update_mode_selection(self, selected_display):
         # Sync internal logic variable based on display
@@ -228,6 +390,19 @@ class EmotionLensApp(ctk.CTk):
         else:
             self.stop_detection() # Stop detection
 
+    def update_start_stop_button(self):
+        if self.detection_running:
+            self.start_stop_btn.configure(
+                text="■ Stop Detection",
+                fg_color="#D0312D",
+                hover_color="#AD1D1D"
+            )
+        else:
+            self.start_stop_btn.configure(
+                text="▶ Start Detection",
+                fg_color="#2FA572",
+                hover_color="#3DBA7C"
+            )
 
     def create_settings_tab(self):
         # Create content for the settings configuration tab
@@ -411,112 +586,6 @@ class EmotionLensApp(ctk.CTk):
 
         print("Settings reset successfully")
         CTkMessagebox(title="Reset", message="Settings reset to default.", icon="warning")
-    
-    def start_detection(self):
-        # Start emotion detection in a separate thread based on selected mode
-        self.detection_running = True
-        self.update_start_stop_button()
-        
-        mode = self.mode_var.get()
-        if mode == "camera":
-            self.detection_thread = threading.Thread(target=self.start_emotionDetection, daemon=True)
-        elif mode == "screen":
-            self.detection_thread = threading.Thread(target=self.start_screen_emotionDetection, daemon=True)
-        elif mode == "image":
-            self.detection_thread = threading.Thread(target=self.image_emotionDetection, daemon=True)
-        elif mode == "video":
-            self.detection_thread = threading.Thread(target=self.video_emotionDetection, daemon=True)
-        else:
-            print("Error: Unknown mode selected")
-            return
-        self.detection_thread.start()
-
-    def stop_detection(self):
-        self.detection_running = False
-        self.update_start_stop_button()
-
-    def update_start_stop_button(self):
-        if self.detection_running:
-            self.start_stop_btn.configure(
-                text="■ Stop Detection",
-                fg_color="#D0312D",
-                hover_color="#AD1D1D"
-            )
-        # Emotion history button when user starts
-        if not hasattr(self, 'history_btn') or not self.history_btn.winfo_exists():
-            self.history_btn = ctk.CTkButton(
-                self.tabview.tab("Main"),
-                text="🕘 View Emotion History",
-                command=self.open_history_window,
-                fg_color="#3B8ED0",
-                hover_color="#36719F"
-            )
-            self.history_btn.pack(pady=10)
-        else:
-            self.start_stop_btn.configure(
-                text="▶ Start Detection",
-                fg_color="#2FA572",
-                hover_color="#3DBA7C"
-            )
-            # Hide emotion history button
-            if hasattr(self, 'history_btn') and self.history_btn.winfo_exists():
-                self.history_btn.destroy()
-
-
-    def update_emotion_history(self, emotion):
-        current_time = time.time()
-
-        # Create a timestamp if this is the first emotion or enough time has passed
-        if not hasattr(self, 'last_update_time'):
-            self.last_update_time = 0
-
-        if emotion != self.last_emotion and (current_time - self.last_update_time) >= 5:
-            self.last_emotion = emotion
-            self.last_update_time = current_time
-            timestamp = time.strftime("%H:%M:%S")
-            entry = f"{timestamp}  =  {emotion}"
-            self.emotion_history.append(entry)
-
-            # Keep only the last 20 entries
-            self.emotion_history = self.emotion_history[-20:]
-
-            # If window is open, update scrollable content
-            if self.history_window and self.scroll_frame:
-                for widget in self.scroll_frame.winfo_children():
-                    widget.destroy()
-
-                for item in reversed(self.emotion_history):
-                    label = ctk.CTkLabel(self.scroll_frame, text=item, anchor="w")
-                    label.pack(anchor="w", padx=10, pady=2)
-
-    def open_history_window(self):
-        if self.history_window is not None:
-            return  # Already open
-
-        self.history_window = ctk.CTkToplevel(self)
-        self.history_window.title("Emotion History")
-        self.history_window.geometry("400x400")
-        self.history_window.protocol("WM_DELETE_WINDOW", self.close_history_window)
-
-        self.after(100, self.load_icon)
-
-        self.scroll_frame = ctk.CTkScrollableFrame(self.history_window)
-        self.scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
-
-        for item in reversed(self.emotion_history):
-            label = ctk.CTkLabel(self.scroll_frame, text=item, anchor="w")
-            label.pack(anchor="w", padx=10, pady=2)
-
-    def load_icon(self):
-        try:
-            icon_path = os.path.join(os.path.dirname(__file__), "icon_emotionLens.ico")
-            if os.path.exists(icon_path):
-                self.iconbitmap(icon_path)
-                print(f"Icon loaded from: {icon_path}")
-            else:
-                print("icon_emotionLens.ico not found")
-        except Exception as e:
-            print(f"Icon load failed: {e}")
 
     def image_emotionDetection(self):
         file_path = filedialog.askopenfilename(
@@ -739,13 +808,7 @@ class EmotionLensApp(ctk.CTk):
                         if isinstance(analysis, list):
                             analysis = analysis[0]
                         emotion = analysis["dominant_emotion"]
-
-                        # If emotion is detected successfully add it to emotion_history list
-                        if hasattr(self, "emotion_history") is False:
-                            self.emotion_history = []
-
-                        if emotion not in ["Error", "No face detected"]:
-                            self.update_emotion_history(emotion)
+                        self.update_emotion_history(emotion)
                     except Exception as e:
                         print("DeepFace error:", str(e))
                         emotion = "Error"
@@ -826,28 +889,22 @@ class EmotionLensApp(ctk.CTk):
                         if isinstance(analysis, list):
                             analysis = analysis[0]
                         emotion = analysis["dominant_emotion"]
-
-                        # If emotion is detected successfully add it to emotion_history list
-                        if hasattr(self, "emotion_history") is False:
-                            self.emotion_history = []
-
-                        if emotion not in ["Error", "No face detected"]:
-                            self.update_emotion_history(emotion)
-                        
-                        # Draw emotion BELOW the bounding box
-                        text_position = (x, y + h + 30)
-                        # Draw background rectangle for text
-                        (text_w, text_h), baseline = cv2.getTextSize(emotion, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, 2)
-                        bg_x, bg_y = text_position[0], text_position[1] - text_h
-                        # Draw semi-transparent background (NOT WOKRINH)
-                        overlay_rect = overlay.copy()
-                        cv2.rectangle(overlay_rect, (bg_x - 5, bg_y - 5), (bg_x + text_w + 5, bg_y + text_h + baseline + 5), (0, 0, 0, 180), -1)
-                        cv2.addWeighted(overlay_rect, 1.0, overlay, 1.0, 0, dst=overlay)
-
-                        # Draw text on overlay after background
-                        cv2.putText(overlay, emotion, text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, (*self.font_colour, 255), 2)
+                        self.update_emotion_history(emotion)
                     except Exception as e:
                         print("DeepFace error:", str(e))
+                        emotion = "Error"
+                        
+                    text_position = (x, y + h + 30)
+                    (text_w, text_h), baseline = cv2.getTextSize(emotion, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, 2)
+                    bg_x, bg_y = text_position[0], text_position[1] - text_h
+                    
+                    # Draw semi-transparent background (NOT WOKRINH)
+                    overlay_rect = overlay.copy()
+                    cv2.rectangle(overlay_rect, (bg_x - 5, bg_y - 5), (bg_x + text_w + 5, bg_y + text_h + baseline + 5), (0, 0, 0, 180), -1)
+                    cv2.addWeighted(overlay_rect, 1.0, overlay, 1.0, 0, dst=overlay)
+
+                    # Draw text on overlay after background
+                    cv2.putText(overlay, emotion, text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, (*self.font_colour, 255), 2)
                 
                 # Display metrics on overlay
                 fps = 1 / (time.time() - start_time + 1e-5)
