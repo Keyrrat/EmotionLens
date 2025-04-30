@@ -59,6 +59,11 @@ class EmotionLensApp(ctk.CTk):
         self.detection_running = False  # Track if detection is active
         self.detection_thread = None  # Save the detection thread
 
+        # Tracking for emotion history window
+        self.emotion_history = []     # Stores last 20 emotions
+        self.last_emotion = None      # Track last emotion for deduplication
+        self.history_window = None    # History popup window
+        self.scroll_frame = None      # Scrollable content area
 
         self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setting_save.txt")
         self.parser = ConfigParser()
@@ -282,23 +287,58 @@ class EmotionLensApp(ctk.CTk):
 
     def create_help_tab(self):
         tab = self.tabview.tab("Help")
-        
-        # Help title
-        help_title = ctk.CTkLabel(tab, text="Welcome to EmotionLens Help Guide!", font=ctk.CTkFont(size=22, weight="bold"))
-        help_title.pack(pady=(30, 10), anchor="center")
-        
-        # Help text (no manual spaces needed)
-        help_text = (
-            "This application helps you detect emotions in real-time using your webcam.\n\n"
-            "- Start Emotion Detection: Begin detecting emotions in real time.\n"
-            "- Settings: Customize bounding box color, font size, and font color.\n"
-            "- Calibrate Camera: Calibrate your camera for better accuracy.\n"
-            "- Quit: Exit the application.\n\n"
-            "Press 'q' during detection to stop the webcam or screen feed."
+
+        # Scrollable frame for long help text
+        help_frame = ctk.CTkScrollableFrame(tab)
+        help_frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+        help_title = ctk.CTkLabel(
+            help_frame,
+            text="Welcome to EmotionLens Help Guide!",
+            font=ctk.CTkFont(size=22, weight="bold"),
         )
-        
-        help_label = ctk.CTkLabel(tab, text=help_text, justify="center", font=ctk.CTkFont(size=16), wraplength=700)
-        help_label.pack(padx=20, pady=10, anchor="center")
+        help_title.pack(pady=(10, 10))
+
+        # Inner frame to centre content
+        inner_frame = ctk.CTkFrame(help_frame, fg_color="transparent")
+        inner_frame.pack(anchor="center")
+
+        help_text = (
+            "Welcome To EmotionLens - Guide \n\n"
+            "📷 Detection Modes:\n"
+            " - Camera: Detects emotions in real-time from your webcam.\n"
+            " - Screen: Detects emotions from people/ faces visible on your screen via a transparent overlay.\n"
+            " - Image: Select an image to detect visible faces and their emotions.\n"
+            " - Video: Load a video file and detect emotions for each face.\n\n"
+            "⚙️ Settings:\n"
+            " - Bounding Box Colour: You can change the colour of rectangles around detected faces.\n"
+            " - Text Colour: Users can change the colour of the emotion labels.\n"
+            " - Text Size: USers can adjust how large the emotion labels are.\n"
+            " - Theme: Users can choose between Light, Dark, or System theme.\n\n"
+            "📽 Camera Calibration:\n"
+            " - Open a live preview to adjust Brightness and Contrast using sliders.\n"
+            " - Press [Esc] to save your changes and return to the app.\n\n"
+            "💾 Saving Settings:\n"
+            " - Use 'Save Settings' to save your custom settings.\n"
+            " - Use 'Reset to Default' to reset all options.\n\n"
+            "🛑 Stopping Detection:\n"
+            " - Press the [Esc] key or click '■ Stop Detection' to exit any detection mode.\n"
+            " - Closing the detection window will also stop detection.\n\n"
+            "❓ Having trouble?\n"
+            " - Make sure your camera is not being used by any other app.\n"
+            " - For screen detection, make sure the overlay window stays open.\n"
+            " - Use the calibration tool to help improve detection accuracy.\n\n"
+            "The Screen, Image, and Video options are currently available only on Windows."
+        )
+
+        help_label = ctk.CTkLabel(
+        inner_frame,
+        text=help_text,
+        justify="left",
+        font=ctk.CTkFont(size=16),
+        wraplength=800
+        )
+        help_label.pack()
 
     def get_colour_name(self, colour):
         # Convert BGR tuple to colour name
@@ -402,13 +442,81 @@ class EmotionLensApp(ctk.CTk):
                 fg_color="#D0312D",
                 hover_color="#AD1D1D"
             )
+        # Emotion history button when user starts
+        if not hasattr(self, 'history_btn') or not self.history_btn.winfo_exists():
+            self.history_btn = ctk.CTkButton(
+                self.tabview.tab("Main"),
+                text="🕘 View Emotion History",
+                command=self.open_history_window,
+                fg_color="#3B8ED0",
+                hover_color="#36719F"
+            )
+            self.history_btn.pack(pady=10)
         else:
             self.start_stop_btn.configure(
                 text="▶ Start Detection",
                 fg_color="#2FA572",
                 hover_color="#3DBA7C"
             )
+            # Hide emotion history button
+            if hasattr(self, 'history_btn') and self.history_btn.winfo_exists():
+                self.history_btn.destroy()
 
+
+    def update_emotion_history(self, emotion):
+        current_time = time.time()
+
+        # Create a timestamp if this is the first emotion or enough time has passed
+        if not hasattr(self, 'last_update_time'):
+            self.last_update_time = 0
+
+        if emotion != self.last_emotion and (current_time - self.last_update_time) >= 5:
+            self.last_emotion = emotion
+            self.last_update_time = current_time
+            timestamp = time.strftime("%H:%M:%S")
+            entry = f"{timestamp}  =  {emotion}"
+            self.emotion_history.append(entry)
+
+            # Keep only the last 20 entries
+            self.emotion_history = self.emotion_history[-20:]
+
+            # If window is open, update scrollable content
+            if self.history_window and self.scroll_frame:
+                for widget in self.scroll_frame.winfo_children():
+                    widget.destroy()
+
+                for item in reversed(self.emotion_history):
+                    label = ctk.CTkLabel(self.scroll_frame, text=item, anchor="w")
+                    label.pack(anchor="w", padx=10, pady=2)
+
+    def open_history_window(self):
+        if self.history_window is not None:
+            return  # Already open
+
+        self.history_window = ctk.CTkToplevel(self)
+        self.history_window.title("Emotion History")
+        self.history_window.geometry("400x400")
+        self.history_window.protocol("WM_DELETE_WINDOW", self.close_history_window)
+
+        self.after(100, self.load_icon)
+
+        self.scroll_frame = ctk.CTkScrollableFrame(self.history_window)
+        self.scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        for item in reversed(self.emotion_history):
+            label = ctk.CTkLabel(self.scroll_frame, text=item, anchor="w")
+            label.pack(anchor="w", padx=10, pady=2)
+
+    def load_icon(self):
+        try:
+            icon_path = os.path.join(os.path.dirname(__file__), "icon_emotionLens.ico")
+            if os.path.exists(icon_path):
+                self.iconbitmap(icon_path)
+                print(f"Icon loaded from: {icon_path}")
+            else:
+                print("icon_emotionLens.ico not found")
+        except Exception as e:
+            print(f"Icon load failed: {e}")
 
     def image_emotionDetection(self):
         file_path = filedialog.askopenfilename(
@@ -466,7 +574,17 @@ class EmotionLensApp(ctk.CTk):
                         dominant_emotion = "Error"
 
                     text_position = (x, y + h + 30)
-                    cv2.putText(frame, dominant_emotion, text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, self.font_colour, 2, cv2.LINE_AA)
+                    (text_w, text_h), baseline = cv2.getTextSize(dominant_emotion, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, 2)
+                    bg_x, bg_y = text_position[0], text_position[1] - text_h
+
+                    # Draw rectangle
+                    overlay = frame.copy()
+                    cv2.rectangle(overlay, (bg_x - 5, bg_y - 5), (bg_x + text_w + 5, bg_y + text_h + baseline + 5), (0, 0, 0), -1)
+                    alpha = 0.5  # transparency factor
+                    frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+
+                    # Draw text on top
+                    cv2.putText(frame, dominant_emotion, text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, self.font_colour, 2)
 
             cv2.imshow("Image Emotion Detection", frame)
 
@@ -533,7 +651,17 @@ class EmotionLensApp(ctk.CTk):
                             last_emotion = "Error"
 
                     text_position = (x, y + h + 30)
-                    cv2.putText(frame, f"{last_emotion}", text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, self.font_colour, 2)
+                    (text_w, text_h), baseline = cv2.getTextSize(last_emotion, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, 2)
+                    bg_x, bg_y = text_position[0], text_position[1] - text_h
+
+                    # Draw background rectangle
+                    overlay = frame.copy()
+                    cv2.rectangle(overlay, (bg_x - 5, bg_y - 5), (bg_x + text_w + 5, bg_y + text_h + baseline + 5), (0, 0, 0), -1)
+                    alpha = 0.5
+                    frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+
+                    # Draw emotion on top
+                    cv2.putText(frame, last_emotion, text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, self.font_colour, 2)
 
                 cv2.imshow("Video Emotion Detection", frame)
 
@@ -577,7 +705,6 @@ class EmotionLensApp(ctk.CTk):
         
         # Load face detection classifier
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-        emotion_history = []  # Track emotion changes over time
 
         shown_once = False
         
@@ -612,11 +739,25 @@ class EmotionLensApp(ctk.CTk):
                         if isinstance(analysis, list):
                             analysis = analysis[0]
                         emotion = analysis["dominant_emotion"]
+
+                        # If emotion is detected successfully add it to emotion_history list
+                        if hasattr(self, "emotion_history") is False:
+                            self.emotion_history = []
+
+                        if emotion not in ["Error", "No face detected"]:
+                            self.update_emotion_history(emotion)
                     except Exception as e:
                         print("DeepFace error:", str(e))
                         emotion = "Error"
 
+                    # Add background for emotion text for accessibility
                     text_position = (x, y + h + 30)
+                    (text_w, text_h), baseline = cv2.getTextSize(emotion, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, 2)
+                    bg_x, bg_y = text_position[0] ,text_position[1] - text_h
+                    cv2.rectangle(frame, (bg_x - 5, bg_y - 5), (bg_x + text_w + 5, bg_y + text_h + baseline + 5), (0, 0, 0), -1)
+
+
+                    # Draw emotion text
                     cv2.putText(frame, f"{emotion}", text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, self.font_colour, 2)
 
                 
@@ -638,7 +779,6 @@ class EmotionLensApp(ctk.CTk):
     def start_screen_emotionDetection(self):
         # Detect emotion from screen using transparent overlay
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-        emotion_history = []
         sct = mss.mss()  # Screen capture tool
         monitor = sct.monitors[self.selected_monitor + 1]  # Selected monitor
         
@@ -686,10 +826,26 @@ class EmotionLensApp(ctk.CTk):
                         if isinstance(analysis, list):
                             analysis = analysis[0]
                         emotion = analysis["dominant_emotion"]
+
+                        # If emotion is detected successfully add it to emotion_history list
+                        if hasattr(self, "emotion_history") is False:
+                            self.emotion_history = []
+
+                        if emotion not in ["Error", "No face detected"]:
+                            self.update_emotion_history(emotion)
                         
                         # Draw emotion BELOW the bounding box
                         text_position = (x, y + h + 30)
-                        cv2.putText(overlay, f"{emotion}", text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, (*self.font_colour, 255), 2)
+                        # Draw background rectangle for text
+                        (text_w, text_h), baseline = cv2.getTextSize(emotion, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, 2)
+                        bg_x, bg_y = text_position[0], text_position[1] - text_h
+                        # Draw semi-transparent background (NOT WOKRINH)
+                        overlay_rect = overlay.copy()
+                        cv2.rectangle(overlay_rect, (bg_x - 5, bg_y - 5), (bg_x + text_w + 5, bg_y + text_h + baseline + 5), (0, 0, 0, 180), -1)
+                        cv2.addWeighted(overlay_rect, 1.0, overlay, 1.0, 0, dst=overlay)
+
+                        # Draw text on overlay after background
+                        cv2.putText(overlay, emotion, text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, (*self.font_colour, 255), 2)
                     except Exception as e:
                         print("DeepFace error:", str(e))
                 
@@ -697,7 +853,8 @@ class EmotionLensApp(ctk.CTk):
                 fps = 1 / (time.time() - start_time + 1e-5)
                 cv2.putText(overlay, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, self.text_size, (*self.font_colour, 255), 2, cv2.LINE_AA)
                 
-                cv2.imshow("EmotionLens Overlay", overlay)
+                display_overlay = cv2.cvtColor(overlay, cv2.COLOR_BGRA2BGR)
+                cv2.imshow("EmotionLens Overlay", display_overlay)
 
                 # Exit with esc
                 if cv2.waitKey(1) & 0xFF == 27:

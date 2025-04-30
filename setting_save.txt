@@ -8,7 +8,7 @@ bounding_box_colour = Red
 font_colour = Yellow
 
 [text_size]
-text_size = Extra Large
+text_size = Medium
 
 [camera]
 brightness = 50
@@ -16,7 +16,7 @@ contrast = 50
 index = 0
 
 [detection]
-mode = image
+mode = screen
 
 [monitor]
 index = 0
