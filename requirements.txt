@@ -1,1 +1,8 @@
-pip install customtkinter deepface opencv-python mss screeninfo pywin32 pygetwindow CTkMessagebox
+customtkinter 
+deepface 
+opencv-python 
+mss 
+screeninfo 
+pywin32 
+pygetwindow 
+CTkMessagebox
