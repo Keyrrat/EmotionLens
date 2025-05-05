@@ -27,12 +27,13 @@ ctk.set_default_color_theme("blue")  # Base theme
 class EmotionLensApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        
+
         # Window configuration
         self.title('EmotionLens')  # Window title
         self.geometry("1000x600")  # Initial window size
         self.minsize(800, 500)  # Minimum window size
 
+        # Try to load window icon
         try:
             icon_path = os.path.join(os.path.dirname(__file__), "icon_emotionLens.ico")
             if os.path.exists(icon_path):
@@ -42,45 +43,48 @@ class EmotionLensApp(ctk.CTk):
         except Exception as e:
             print(f"Failed to load window icon: {e}")
 
-        # Initialize variables with default values
-        self.cap = None  # Video capture object
-        self.bounding_box_colour = (255, 255, 255)  # BGR format for OpenCV
-        self.font_colour = (255, 255, 255)  # Text colour for display
+        # Initialise variables with default values
+        self.cap = None  # Video capture object for camera
+        self.bounding_box_colour = (255, 255, 255)  # BGR format for OpenCV (white)
+        self.font_colour = (255, 255, 255)  # Text colour for display (white)
         self.brightness = 50  # Default camera brightness (0-100)
         self.contrast = 50  # Default camera contrast (0-100)
-        self.available_monitors = []
-        self.selected_monitor = 0
-        self.available_cameras = []
-        self.selected_camera = 0
+        self.available_monitors = []  # List of available monitors
+        self.selected_monitor = 0  # Currently selected monitor index
+        self.available_cameras = []  # List of available cameras
+        self.selected_camera = 0  # Currently selected camera index
         
-        # Emotion history tracking
-        self.emotion_history = []
-        self.last_emotion = None
-        self.last_update_time = 0
-        self.history_panel_height = 300
-        self.animation_step = 0
-        self.animation_running = False
-        self.history_panel_visible = False
+        # Emotion history tracking variables
+        self.emotion_history = []  # Stores past detected emotions
+        self.last_emotion = None  # Last detected emotion
+        self.last_update_time = 0  # Time of last emotion update
+        self.history_panel_height = 300  # Height of history panel
+        self.animation_step = 0  # Current animation step for panel
+        self.animation_running = False  # Animation state flag
+        self.history_panel_visible = False  # Panel visibility flag
 
-        self.mode_var = ctk.StringVar()
-        self.mode_display_var = ctk.StringVar()
-        self.detection_running = False  # Track if detection is active
-        self.detection_thread = None  # Save the detection thread
+        # UI state variables
+        self.mode_var = ctk.StringVar()  # Internal detection mode
+        self.mode_display_var = ctk.StringVar()  # Displayed mode
+        self.detection_running = False  # Detection active flag
+        self.detection_thread = None  # Thread running detection
 
+        # Configuration file setup
         self.config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setting_save.txt")
         self.parser = ConfigParser()
-        self.load_config()
+        self.load_config()  # Load or create config file
 
+        # Set initial mode from config
         saved_mode = self.parser.get('detection', 'mode', fallback='camera')
         self.mode_var.set(saved_mode)
         self.mode_display_var.set("Camera" if saved_mode == "camera" else 
-                                 "Screen" if saved_mode == "screen" else
-                                 "Image" if saved_mode == "image" else "Video")
+                                "Screen" if saved_mode == "screen" else
+                                "Image" if saved_mode == "image" else "Video")
 
-        self.create_main_ui()
+        self.create_main_ui()  # Build the user interface
 
-    # Load or create configuration file with saved settings
     def load_config(self):
+        # Load or create configuration file with saved settings
         try:
             if not self.parser.read(self.config_path):
                 # Create default config if file doesn't exist
@@ -99,19 +103,27 @@ class EmotionLensApp(ctk.CTk):
                 saved_theme = self.parser.get('style', 'style', fallback='System')
                 ctk.set_appearance_mode(saved_theme)
                 
-                self.bounding_box_colour = self.get_colour_from_name(self.parser.get('bounding_box_colour', 'bounding_box_colour', fallback='White'))
-                self.font_colour = self.get_colour_from_name(self.parser.get('font_colour', 'font_colour', fallback='White'))
-                self.text_size = self.get_text_size(self.parser.get('text_size', 'text_size', fallback='Medium'))
+                # Load colour settings
+                self.bounding_box_colour = self.get_colour_from_name(
+                    self.parser.get('bounding_box_colour', 'bounding_box_colour', fallback='White'))
+                self.font_colour = self.get_colour_from_name(
+                    self.parser.get('font_colour', 'font_colour', fallback='White'))
+                
+                # Load text size and camera settings
+                self.text_size = self.get_text_size(
+                    self.parser.get('text_size', 'text_size', fallback='Medium'))
                 self.brightness = int(self.parser.get('camera', 'brightness', fallback='50'))
                 self.contrast = int(self.parser.get('camera', 'contrast', fallback='50'))
                 self.selected_camera = int(self.parser.get('camera', 'index', fallback='0'))
                 self.selected_monitor = int(self.parser.get('monitor', 'index', fallback='0'))
                 self.mode_var.set(self.parser.get('detection', 'mode', fallback='camera'))
 
+                # Detect available cameras and validate selection
                 self.detect_available_cameras()
                 if self.selected_camera not in self.available_cameras:
                     self.selected_camera = self.available_cameras[0]
 
+                # Get monitor info and validate selection
                 self.available_monitors = screeninfo.get_monitors()
                 if self.selected_monitor >= len(self.available_monitors):
                     self.selected_monitor = 0
@@ -119,10 +131,12 @@ class EmotionLensApp(ctk.CTk):
             print(f"Error reading config: {e}")
 
     def detect_available_cameras(self):
+        # Scan for available cameras by testing indexes until failure
         self.available_cameras = []
         test_index = 0
         consecutive_failures = 0
 
+        # Try camera indexes until we get 5 consecutive failures
         while consecutive_failures < 5:
             cap = cv2.VideoCapture(test_index)
             if cap.isOpened():
@@ -133,6 +147,7 @@ class EmotionLensApp(ctk.CTk):
                 consecutive_failures += 1
             test_index += 1
 
+        # Fallback to index 0 if no cameras found
         if not self.available_cameras:
             self.available_cameras = [0]
             print("Warning: No cameras found, defaulting to index 0")
@@ -140,9 +155,9 @@ class EmotionLensApp(ctk.CTk):
         self.selected_camera = self.available_cameras[0]
 
     def get_colour_from_name(self, colour_name):
-        # OpenCV uses BGR format
+        # Convert colour name to BGR tuple used by OpenCV
         colour_mapping = {
-            "Blue": (255, 0, 0),
+            "Blue": (255, 0, 0),    # BGR format
             "Red": (0, 0, 255),
             "Green": (0, 255, 0),
             "Yellow": (0, 255, 255),
@@ -151,7 +166,16 @@ class EmotionLensApp(ctk.CTk):
         }
         return colour_mapping.get(colour_name, (255, 255, 255))  # Default white
 
-    # Create UI
+    def get_text_size(self, size_name):
+        # Map text size names to scaling factors
+        size_mapping = {
+            "Small": 0.5,
+            "Medium": 0.7,
+            "Large": 1.0,
+            "Extra Large": 1.2
+        }
+        return size_mapping.get(size_name, 0.7)  # Default to Medium size
+
     def create_main_ui(self):
         # Clear existing widgets if any
         for widget in self.winfo_children():
@@ -219,6 +243,7 @@ class EmotionLensApp(ctk.CTk):
         self.create_history_panel()
 
     def create_history_panel(self):
+        # Create the emotion history panel that slides up from bottom
         self.history_container = ctk.CTkFrame(
             self.tabview.tab("Main"),
             fg_color="transparent",
@@ -235,6 +260,7 @@ class EmotionLensApp(ctk.CTk):
         )
         self.history_panel.pack(fill="both", expand=True)
 
+        # Panel header with title and close button
         title_frame = ctk.CTkFrame(self.history_panel, fg_color="transparent")
         title_frame.pack(fill="x", padx=10, pady=10)
         
@@ -253,6 +279,7 @@ class EmotionLensApp(ctk.CTk):
         )
         close_btn.pack(side="right")
         
+        # Scrollable area for history items
         self.history_scroll = ctk.CTkScrollableFrame(
             self.history_panel,
             fg_color="transparent"
@@ -260,6 +287,7 @@ class EmotionLensApp(ctk.CTk):
         self.history_scroll.pack(fill="both", expand=True, padx=10, pady=(0,10))
 
     def update_emotion_history(self, emotion):
+        # Add new emotion to history if different from last and enough time passed
         if not self.detection_running:
             return
             
@@ -270,17 +298,22 @@ class EmotionLensApp(ctk.CTk):
             timestamp = time.strftime("%H:%M:%S")
             self.emotion_history.append(f"{timestamp}  =  {emotion}")
             
+            # Limit history to 20 most recent entries
             if len(self.emotion_history) > 20:
                 self.emotion_history = self.emotion_history[-20:]
             
+            # Update UI if panel is visible
             if hasattr(self, 'history_panel_visible') and self.history_panel_visible:
                 self.update_history_content()
 
     def update_history_content(self):
+        # Refresh the history panel with current emotion data
         if hasattr(self, 'history_scroll'):
+            # Clear existing widgets
             for widget in self.history_scroll.winfo_children():
                 widget.destroy()
             
+            # Show message if no history available
             if not self.emotion_history:
                 ctk.CTkLabel(
                     self.history_scroll,
@@ -288,6 +321,7 @@ class EmotionLensApp(ctk.CTk):
                     justify="center"
                 ).pack(pady=20)
             else:
+                # Add each history entry with timestamp and emotion
                 for item in reversed(self.emotion_history):
                     entry_frame = ctk.CTkFrame(self.history_scroll, fg_color="transparent")
                     entry_frame.pack(fill="x", pady=2)
@@ -309,7 +343,9 @@ class EmotionLensApp(ctk.CTk):
                     ).pack(side="left", fill="x", expand=True)
 
     def start_detection(self):
+        # Start emotion detection based on selected mode
         if not self.detection_running:
+            # Reset tracking variables
             self.emotion_history = []
             self.last_emotion = None
             self.last_update_time = 0
@@ -317,6 +353,7 @@ class EmotionLensApp(ctk.CTk):
         self.detection_running = True
         self.update_start_stop_button()
         
+        # Start appropriate detection thread based on mode
         mode = self.mode_var.get()
         if mode == "camera":
             self.detection_thread = threading.Thread(target=self.start_emotionDetection, daemon=True)
@@ -330,12 +367,14 @@ class EmotionLensApp(ctk.CTk):
         self.detection_thread.start()
 
     def stop_detection(self):
+        # Stop any running detection process
         self.detection_running = False
         self.update_start_stop_button()
         if hasattr(self, 'history_panel_visible') and self.history_panel_visible:
             self.update_history_content()
 
     def show_history_panel(self):
+        # Show the sliding history panel
         if not hasattr(self, 'history_panel'):
             self.create_history_panel()
         
@@ -345,11 +384,13 @@ class EmotionLensApp(ctk.CTk):
             self.update_history_content()
 
     def hide_history_panel(self):
+        # Hide the sliding history panel
         if hasattr(self, 'history_panel') and self.history_panel_visible:
             self.history_panel_visible = False
             self.animate_panel(show=False)
 
     def animate_panel(self, show=True):
+        # Animate the history panel sliding up/down
         if self.animation_running:
             return
             
@@ -375,7 +416,7 @@ class EmotionLensApp(ctk.CTk):
         update()
 
     def update_mode_selection(self, selected_display):
-        # Sync internal logic variable based on display
+        # Update detection mode based on UI selection
         mode_map = {"Camera": "camera", "Screen": "screen", "Image": "image", "Video": "video"}
         self.mode_var.set(mode_map.get(selected_display, "camera"))
 
@@ -385,12 +426,14 @@ class EmotionLensApp(ctk.CTk):
             self.parser.write(configfile)
             
     def toggle_detection(self):
+        # Toggle detection start/stop
         if not self.detection_running:
             self.start_detection() # Start detection
         else:
             self.stop_detection() # Stop detection
 
     def update_start_stop_button(self):
+        # Update button appearance based on detection state
         if self.detection_running:
             self.start_stop_btn.configure(
                 text="■ Stop Detection",
@@ -461,6 +504,7 @@ class EmotionLensApp(ctk.CTk):
         reset_btn.pack(pady=10)
 
     def create_help_tab(self):
+        # Create help tab with usage instructions
         tab = self.tabview.tab("Help")
 
         # Scrollable frame for long help text
@@ -474,7 +518,7 @@ class EmotionLensApp(ctk.CTk):
         )
         help_title.pack(pady=(10, 10))
 
-        # Inner frame to centre content
+        # Inner frame to center content
         inner_frame = ctk.CTkFrame(help_frame, fg_color="transparent")
         inner_frame.pack(anchor="center")
 
@@ -528,20 +572,11 @@ class EmotionLensApp(ctk.CTk):
             (0, 0, 0): "Black",
         }
         return colour_mapping.get(tuple(colour), "White")
-    
-    def get_text_size(self, size_name):
-        size_mapping = {
-            "Small": 0.5,
-            "Medium": 0.7,
-            "Large": 1.0,
-            "Extra Large": 1.2
-        }
-        return size_mapping.get(size_name, 0.7)  # Default to Medium size
-    
+
     def change_theme(self, new_theme):
         # Change the application theme dynamically
         ctk.set_appearance_mode(new_theme)
-    
+
     def save_settings(self):
         # Save current settings to config file
         try:
@@ -567,7 +602,7 @@ class EmotionLensApp(ctk.CTk):
         except Exception as e:
             print(f"Error saving settings: {e}")
             CTkMessagebox(title="Error", message="Error saving settings!", icon="cancel")
-    
+
     def reset_settings(self):
         # Reset all settings to default values
         self.theme_var.set("System")
@@ -590,6 +625,7 @@ class EmotionLensApp(ctk.CTk):
         CTkMessagebox(title="Reset", message="Settings reset to default.", icon="warning")
 
     def image_emotionDetection(self):
+        # Perform emotion detection on a selected image file
         file_path = filedialog.askopenfilename(
             title="Select Image",
             filetypes=[("Image Files", "*.jpg *.jpeg *.png *.bmp *.tiff")]
@@ -609,6 +645,7 @@ class EmotionLensApp(ctk.CTk):
         min_width = 500
         min_height = 500
 
+        # Resize if image is too small
         height, width = frame.shape[:2]
         if width < min_width or height < min_height:
             scale_w = min_width / width
@@ -620,7 +657,7 @@ class EmotionLensApp(ctk.CTk):
             print(f"Image resized to: {new_width}x{new_height}")
 
         try:
-            # Detect faces
+            # Detect faces using Haar Cascade
             face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
@@ -644,11 +681,12 @@ class EmotionLensApp(ctk.CTk):
                         print(f"DeepFace error on face: {e}")
                         dominant_emotion = "Error"
 
+                    # Calculate text position with background
                     text_position = (x, y + h + 30)
                     (text_w, text_h), baseline = cv2.getTextSize(dominant_emotion, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, 2)
                     bg_x, bg_y = text_position[0], text_position[1] - text_h
 
-                    # Draw rectangle
+                    # Draw semi-transparent background rectangle
                     overlay = frame.copy()
                     cv2.rectangle(overlay, (bg_x - 5, bg_y - 5), (bg_x + text_w + 5, bg_y + text_h + baseline + 5), (0, 0, 0), -1)
                     alpha = 0.5  # transparency factor
@@ -657,9 +695,10 @@ class EmotionLensApp(ctk.CTk):
                     # Draw text on top
                     cv2.putText(frame, dominant_emotion, text_position, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, self.font_colour, 2)
 
+            # Display result
             cv2.imshow("Image Emotion Detection", frame)
 
-            # Exit
+            # Handle window close and ESC key
             while True:
                 if cv2.getWindowProperty("Image Emotion Detection", cv2.WND_PROP_VISIBLE) < 1:
                     self.stop_detection()
@@ -677,6 +716,7 @@ class EmotionLensApp(ctk.CTk):
             self.stop_detection()
     
     def video_emotionDetection(self):
+        # Perform emotion detection on a selected video file
         video_path = filedialog.askopenfilename(
             title="Select Video",
             filetypes=[("Video Files", "*.mp4 *.avi *.mov *.mkv *.flv *.wmv")]
@@ -694,7 +734,7 @@ class EmotionLensApp(ctk.CTk):
 
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
         frame_count = 0
-        last_emotion = "Detecting..."
+        last_emotion = "Detecting..."  # Default text
 
         try:
             while cap.isOpened() and self.detection_running:
@@ -709,7 +749,7 @@ class EmotionLensApp(ctk.CTk):
                 for (x, y, w, h) in faces:
                     cv2.rectangle(frame, (x, y), (x + w, y + h), self.bounding_box_colour, 2)
 
-                    # Only run DeepFace every 5 frames
+                    # Only run DeepFace every 5 frames for performance
                     if frame_count % 5 == 0:
                         face_roi = frame[y:y+h, x:x+w]
                         try:
@@ -721,11 +761,12 @@ class EmotionLensApp(ctk.CTk):
                             print("DeepFace error:", str(e))
                             last_emotion = "Error"
 
+                    # Calculate text position with background
                     text_position = (x, y + h + 30)
                     (text_w, text_h), baseline = cv2.getTextSize(last_emotion, cv2.FONT_HERSHEY_SIMPLEX, self.text_size, 2)
                     bg_x, bg_y = text_position[0], text_position[1] - text_h
 
-                    # Draw background rectangle
+                    # Draw semi-transparent background
                     overlay = frame.copy()
                     cv2.rectangle(overlay, (bg_x - 5, bg_y - 5), (bg_x + text_w + 5, bg_y + text_h + baseline + 5), (0, 0, 0), -1)
                     alpha = 0.5
