@@ -550,6 +550,7 @@ class EmotionLensApp(ctk.CTk):
             " - You can always restart the application if something isn't working or is frozen"
             " - Use the calibration tool to help improve detection accuracy.\n\n"
             "The Screen, Image, and Video options are currently available only on Windows."
+            "IMPORTANT - EmotionLens is designed to support you in recognising emotions, not replace your own judgment. Always remember that the tool is meant as a helpful aid — final decisions and interpretations are yours to make."
         )
 
         help_label = ctk.CTkLabel(
