@@ -1,11 +1,11 @@
 [style]
-style = Dark
+style = System
 
 [bounding_box_colour]
-bounding_box_colour = Red
+bounding_box_colour = White
 
 [font_colour]
-font_colour = Yellow
+font_colour = White
 
 [text_size]
 text_size = Medium
@@ -16,7 +16,7 @@ contrast = 50
 index = 0
 
 [detection]
-mode = screen
+mode = camera
 
 [monitor]
 index = 0

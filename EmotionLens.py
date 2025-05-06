@@ -813,8 +813,8 @@ class EmotionLensApp(ctk.CTk):
             return
         
         # Apply saved camera settings
-        self.cap.set(cv2.CAP_PROP_BRIGHTNESS, self.brightness / 100)
-        self.cap.set(cv2.CAP_PROP_CONTRAST, self.contrast / 100)
+        self.cap.set(cv2.CAP_PROP_BRIGHTNESS, self.brightness / 0.5)
+        self.cap.set(cv2.CAP_PROP_CONTRAST, self.contrast / 0.5)
         
         # Load face detection classifier
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
